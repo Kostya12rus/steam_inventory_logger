@@ -1,0 +1,6 @@
+pyinstaller
+requests
+loguru
+flet
+rsa
+cryptography
