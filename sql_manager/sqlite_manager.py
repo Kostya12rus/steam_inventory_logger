@@ -15,9 +15,15 @@ tables_structure = {
         ''',
     'history':
         '''
-            time_update INTEGER,
-            app_id INTEGER,
-            items TEXT
+            time_update     INTEGER,
+            app_id          INTEGER,
+            items           TEXT
+        ''',
+    'market_history':
+        '''
+            time_update     INTEGER,
+            app_id          INTEGER,
+            items           TEXT
         ''',
 }
 
@@ -101,7 +107,7 @@ class SqliteDatabaseManager:
     def save_history(self, time_update: datetime.datetime, items: dict, app_id: int) -> bool:
         try:
             # Сериализуем словарь в JSON
-            items_json = json.dumps(items)
+            items_json = json.dumps(items, ensure_ascii=False)
             # Конвертируем datetime в UNIX timestamp
             timestamp = int(time_update.timestamp())
 
@@ -154,6 +160,40 @@ class SqliteDatabaseManager:
             logger.exception(f"Ошибка при получении истории: {e}")
             return []
 
+
+    def save_market_history(self, time_update: datetime.datetime, items: dict, app_id: int) -> bool:
+        try:
+            items_json = json.dumps(items, ensure_ascii=False)
+            timestamp = int(time_update.timestamp())
+            with self.__db_lock, self.__connect() as conn:
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("INSERT INTO market_history (time_update, app_id, items) VALUES (?, ?, ?)",(timestamp, app_id, items_json))
+                    conn.commit()
+                finally:
+                    cursor.close()
+                return True
+        except Exception as e:
+            logger.exception(f"Ошибка при сохранении истории market: {e}")
+            return False
+
+    def get_recent_market_history(self) -> list:
+        try:
+            with self.__db_lock, self.__connect() as conn:
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT time_update, app_id, items FROM market_history ORDER BY time_update DESC")
+                    rows = cursor.fetchall()
+                    return [{
+                        'time_update': datetime.datetime.fromtimestamp(row[0]),
+                        'app_id': row[1],
+                        'items': json.loads(row[2])
+                    } for row in rows]
+                finally:
+                    cursor.close()
+        except Exception as e:
+            logger.exception(f"Ошибка при получении истории: {e}")
+            return []
 
     def save_setting(self, name: str, value: str | list | dict) -> None:
         """

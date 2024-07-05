@@ -1,10 +1,7 @@
-import json
-import re
-import time
+import json, re, time
 import urllib.parse
 
 from requests import Session
-
 from steam_utility import WebSteam
 from logger_utility.logger_config import logger
 
@@ -315,3 +312,47 @@ class SteamWebSession:
         if len(text_steam_send) > 1:
             logger.info(f"Обмен не отправлен, Steam ответил: {text_steam_send}")
             return
+
+    def get_game_market_list(self, appid: int = 2923300, start: int = 0, count: int = 100) -> list:
+        """
+        Получает список товаров на игровом рынке Steam.
+
+        :param appid: ID приложения в Steam.
+        :param start: Начальный индекс списка товаров.
+        :param count: Количество возвращаемых товаров.
+        :return: Список товаров на рынке.
+        """
+        search_params = {
+            'start': start,
+            'count': count,
+            'search_descriptions': 1,
+            'sort_column': 'quantity',
+            'sort_dir': 'desc',
+            'appid': appid,
+            'norender': 1,
+        }
+        search_url = "https://steamcommunity.com/market/search/render/"
+        market_items = []
+        max_attempts = 2
+
+        for attempt in range(max_attempts):
+            try:
+                market_response = self.steam_session.get(search_url, params=search_params, timeout=10)
+                if market_response.ok:
+                    response_data = market_response.json()
+                    if response_data.get('success', False):
+                        market_items.extend(response_data.get('results', []))
+                        total_items_available = response_data.get('total_count', 0)
+                        if total_items_available > start + count:
+                            start += count
+                            market_items.extend(self.get_game_market_list(appid, start, count))
+                        return market_items
+            except Exception as e:
+                pass
+            time.sleep(5)
+
+        return market_items
+
+
+
+
