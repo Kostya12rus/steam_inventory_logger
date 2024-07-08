@@ -7,6 +7,7 @@ from flet_manager import common
 import flet as ft
 
 from sql_manager.config import setting
+from logger_utility.logger_config import logger
 
 
 class DialogSell(ft.AlertDialog):
@@ -358,6 +359,24 @@ class InventoryWidget(ft.Row):
     def will_unmount(self):
         self.__is_run = False
 
+    def update_widget(self):
+        if common.dialog_is_open: return
+        if not common.debug_test:
+            common.update_inventory()
+            common.update_items_price()
+        self.update_history()
+        self.update_datagram()
+    def __update(self):
+        while self.__is_run:
+            try:
+                self.update_widget()
+                self.update()
+                self.page.update()
+            except:
+                logger.exception('Exception in iventory update')
+            finally:
+                time.sleep(10)
+
     def open_sell_item(self, *args, item_data=None):
         if not item_data: return
         dialog = DialogSell(item_data)
@@ -365,7 +384,6 @@ class InventoryWidget(ft.Row):
         dialog.open = True
         common.dialog_is_open = True
         self.page.update()
-
 
     @staticmethod
     def calculate_count_change(old_item: dict, new_item: dict) -> int:
@@ -707,20 +725,4 @@ class InventoryWidget(ft.Row):
         self.items_price_column.controls.insert(1, row_total_info)
         self.items_price_column.controls.insert(2, ft.VerticalDivider(2))
 
-    def update_widget(self):
-        if common.dialog_is_open: return
-        if not common.debug_test:
-            common.update_inventory()
-            common.update_items_price()
-        self.update_history()
-        self.update_datagram()
 
-    def __update(self):
-        while self.__is_run:
-            try:
-                self.update_widget()
-                self.page.update()
-            except:
-                pass
-            self.update()
-            time.sleep(10)

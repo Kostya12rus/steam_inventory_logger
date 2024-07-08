@@ -39,9 +39,12 @@ class InventoryManager:
         for item in self.inventory:
             classid = item.get('classid', 0)
             if classid == 0: continue
+            instanceid = item.get('instanceid', 0)
             for key, item_d in self.rgDescriptions.items():
                 classid_d = item_d.get('classid', 0)
                 if classid != classid_d: continue
+                instanceid_d = item_d.get('instanceid', 0)
+                if instanceid != instanceid_d: continue
                 item['rgDescriptions'] = item_d
                 break
 
@@ -325,8 +328,8 @@ class SteamWebSession:
         search_params = {
             'start': start,
             'count': count,
-            'search_descriptions': 1,
-            'sort_column': 'quantity',
+            'search_descriptions': 0,
+            'sort_column': 'popular',
             'sort_dir': 'desc',
             'appid': appid,
             'norender': 1,

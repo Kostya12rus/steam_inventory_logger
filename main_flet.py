@@ -18,8 +18,8 @@ class MainPage:
     def create_login_page(self, *args):
         self.page.clean()
         self.page.add(self.login_page)
-        self.login_page.login = str(setting.login)
-        self.login_page.password = str(setting.password)
+        self.login_page.login.value = str(setting.login)
+        self.login_page.password.value = str(setting.password)
         self.login_page.enter_button.on_click = self.on_login
 
     def create_inventory(self, *args):
@@ -72,8 +72,9 @@ class MainPage:
     def build(self, page: ft.Page):
         self.page: ft.Page = page
         self.page.title = 'Привет'
-        self.page.window_prevent_close = True
-        self.page.on_window_event = self.__on_window_event
+        self.page.window.width = 1500
+        self.page.window.prevent_close = True
+        self.page.window.on_window_event = self.__on_window_event
         # self.page.window_always_on_top = True
         self.create_login_page()
         self.on_login()

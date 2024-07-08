@@ -63,6 +63,10 @@ class Games(Enum):
     Steam = 753
     Tapple = 3047030
     Meh = 3065090
+    Duck = 3057940
+    Raspberry = 3048820
+    Monkey = 3057390
+    Poop = 1506810
 
 class CustomContextID(Enum):
     Steam = 6
