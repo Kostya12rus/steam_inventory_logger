@@ -82,12 +82,14 @@ class ItemDelta:
         self.sell_price_percent = self.__generate_sell_price_percent()
         self.sell_listings_percent = self.__generate_sell_listings_percent()
 
-    def __replace_number_in_currency(self, new_number):
+    def replace_number_in_currency(self, new_number):
         original_str = self.now_item.sell_price_text if self.now_item.sell_price_text else self.old_item.sell_price_text
         if not original_str: return str(new_number)
         return re.sub(r'\d{1,3}(?:\s?\d{3})*(?:[,.]\d+)?', new_number, str(original_str))
+    def generate_number_in_currency(self, new_number):
+        return self.replace_number_in_currency(f"{round(new_number / 100, 2):.2f}")
     def __generate_sell_price_text(self):
-        return self.__replace_number_in_currency(f"{round((self.now_item.sell_price - self.old_item.sell_price) / 100, 2):.2f}")
+        return self.replace_number_in_currency(f"{round((self.now_item.sell_price - self.old_item.sell_price) / 100, 2):.2f}")
     def __generate_sell_price_percent(self):
         _percent_change = abs((self.now_item.sell_price / self.old_item.sell_price) - 1 if self.old_item.sell_price != 0 else 0)
         return round(_percent_change * 100, 2)
@@ -223,7 +225,7 @@ class ItemData:
         self.item_name_widget_text.value = self.constant_item.name
         self.item_name_widget_text.color = self.constant_item.color()
 
-        self.now_item_price_widget_text.value = self.now_item.sell_price_text
+        self.now_item_price_widget_text.value = self.last_delta.generate_number_in_currency(self.now_item.sell_price)
         self.now_item_count_widget_text.value = f'{self.now_item.sell_listings}шт.'
 
         self.last_item_price_widget_text.value = self.last_delta.sell_price_text if self.last_delta.is_draw_sell_price_text() else ' '
@@ -261,38 +263,43 @@ class MarketItemListTable(ft.DataTable):
         self.data_row_min_height = 25
         self.data_row_max_height = 25
 
-        self.sort_type = 'now'
+        self.sort_type = 'count_now'
+        self.sort_descending = True
         self.name_filter = ''
         self.items_list: dict[str, ItemData] = {}
 
         title_column_name_text_widget = ft.Text('Предмет', size=18)
         title_column_name_textfield_widget = ft.TextField(label='Name Filter', dense=True, content_padding=10, text_align=ft.TextAlign.LEFT,
                                                           expand=True, max_lines=1)
-        title_column_name_textfield_widget.on_submit = lambda e: self.__on_change_name_filter(title_column_name_textfield_widget.value)
+        title_column_name_textfield_widget.on_change = lambda e: self.__on_change_name_filter(title_column_name_textfield_widget.value)
         title_column_name_row_widget = ft.Row(controls=[title_column_name_text_widget, title_column_name_textfield_widget], expand=True)
         title_column_name_container_widget = ft.Container(width=200, height=self.heading_row_height, content=title_column_name_row_widget)
         title_column_name_widget = ft.DataColumn(title_column_name_container_widget)
 
         t_c_n_widget_container = ft.Container(width=200, content=ft.Text('Цена сейчас', size=18, text_align=ft.TextAlign.CENTER, expand=True))
-        t_c_n_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True), ft.FilledButton('Кол-во', expand=True)], expand=True)
+        t_c_n_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True, on_click=lambda e: self.__on_change_sort('price_now')),
+                                            ft.FilledButton('Кол-во', expand=True, on_click=lambda e: self.__on_change_sort('count_now'))], expand=True)
         t_c_n_main_widget_container = ft.Container(width=200, height=self.heading_row_height,
                                                    content=ft.Column(spacing=0, controls=[t_c_n_widget_container, t_c_n_widget_row]))
         t_c_n = ft.DataColumn(t_c_n_main_widget_container)
 
         t_c_l_widget_container = ft.Container(width=200, content=ft.Text('Прошлая проверка', size=18, text_align=ft.TextAlign.CENTER, expand=True))
-        t_c_l_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True), ft.FilledButton('Кол-во', expand=True)], expand=True)
+        t_c_l_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True, on_click=lambda e: self.__on_change_sort('price_last')),
+                                            ft.FilledButton('Кол-во', expand=True, on_click=lambda e: self.__on_change_sort('count_last'))], expand=True)
         t_c_l_main_widget_container = ft.Container(width=200, height=self.heading_row_height,
                                                    content=ft.Column(spacing=0, controls=[t_c_l_widget_container, t_c_l_widget_row]))
         t_c_l = ft.DataColumn(t_c_l_main_widget_container)
 
         t_c_h_widget_container = ft.Container(width=200, content=ft.Text('Цена за час', size=18, text_align=ft.TextAlign.CENTER, expand=True))
-        t_c_h_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True), ft.FilledButton('Кол-во', expand=True)], expand=True)
+        t_c_h_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True, on_click=lambda e: self.__on_change_sort('price_hours')),
+                                            ft.FilledButton('Кол-во', expand=True, on_click=lambda e: self.__on_change_sort('count_hours'))], expand=True)
         t_c_h_main_widget_container = ft.Container(width=200, height=self.heading_row_height,
                                                    content=ft.Column(spacing=0, controls=[t_c_h_widget_container, t_c_h_widget_row]))
         t_c_h = ft.DataColumn(t_c_h_main_widget_container)
 
         t_c_d_widget_container = ft.Container(width=200, content=ft.Text('Цена за день', size=18, text_align=ft.TextAlign.CENTER, expand=True))
-        t_c_d_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True), ft.FilledButton('Кол-во', expand=True)], expand=True)
+        t_c_d_widget_row = ft.Row(controls=[ft.FilledButton('Цена', expand=True, on_click=lambda e: self.__on_change_sort('price_day')),
+                                            ft.FilledButton('Кол-во', expand=True, on_click=lambda e: self.__on_change_sort('count_day'))], expand=True)
         t_c_d_main_widget_container = ft.Container(width=200, height=self.heading_row_height,
                                                    content=ft.Column(spacing=0, controls=[t_c_d_widget_container, t_c_d_widget_row]))
         t_c_d = ft.DataColumn(t_c_d_main_widget_container)
@@ -301,10 +308,48 @@ class MarketItemListTable(ft.DataTable):
 
     def __on_change_name_filter(self, name_filter: str = ''):
         self.name_filter = name_filter
-        print(self.name_filter)
+        items_list: list[ItemData] = [item for market_hash_name, item in self.items_list.items()]
 
-    def __on_change_sort(self, sort_type: str = ''):
-        self.sort_type = sort_type
+        self.rows = [item.item_widget_datarow for item in items_list if self.name_filter.lower() in item.item_name_widget_text.value.lower()]
+        self.update()
+
+    def __on_change_sort(self, sort_type: str = '', update_sort: bool = False):
+        if not update_sort:
+            self.sort_descending = True if self.sort_type != sort_type else not self.sort_descending
+            self.sort_type = sort_type
+
+        items_list: list[ItemData] = [item for market_hash_name, item in self.items_list.items()
+                                      if self.name_filter.lower() in item.item_name_widget_text.value.lower()]
+        if self.sort_type == 'price_now':
+            items_list.sort(key=lambda item: self.extract_number(item.now_item_price_widget_text.value), reverse=self.sort_descending)
+        elif self.sort_type == 'count_now':
+            items_list.sort(key=lambda item: self.extract_number(item.now_item_count_widget_text.value), reverse=self.sort_descending)
+
+        elif self.sort_type == 'price_last':
+            items_list.sort(key=lambda item: self.extract_number(item.last_item_price_widget_text.value), reverse=self.sort_descending)
+        elif self.sort_type == 'count_last':
+            items_list.sort(key=lambda item: self.extract_number(item.last_item_count_widget_text.value), reverse=self.sort_descending)
+
+        elif self.sort_type == 'price_hours':
+            items_list.sort(key=lambda item: self.extract_number(item.hour_item_price_widget_text.value), reverse=self.sort_descending)
+        elif self.sort_type == 'count_hours':
+            items_list.sort(key=lambda item: self.extract_number(item.hour_item_count_widget_text.value), reverse=self.sort_descending)
+
+        elif self.sort_type == 'price_day':
+            items_list.sort(key=lambda item: self.extract_number(item.day_item_price_widget_text.value), reverse=self.sort_descending)
+        elif self.sort_type == 'count_day':
+            items_list.sort(key=lambda item: self.extract_number(item.day_item_count_widget_text.value), reverse=self.sort_descending)
+
+        self.rows = [item.item_widget_datarow for item in items_list]
+        self.update()
+    @staticmethod
+    def extract_number(text):
+        match = re.search(r'[-+]?\d[\d\s,]*\.?\d*|\d*\.?\d+', text)
+        if match:
+            number_str = match.group(0)
+            number_str = number_str.replace(' ', '').replace(',', '.')
+            return float(number_str)
+        return 0.0
 
     def create_update_items(self):
         list_history = ListHistory()
@@ -323,7 +368,7 @@ class MarketItemListTable(ft.DataTable):
                 self.rows.append(item_data.item_widget_datarow)
             self.items_list[market_hash_name].update_data(now_history, last_history, hour_history, day_history)
         self.update()
-
+        self.__on_change_sort(self.sort_type, update_sort=True)
 
 class MarketWidget(ft.Row):
     def __init__(self):
