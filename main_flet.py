@@ -64,10 +64,14 @@ class MainPage:
 
     def __on_window_event(self, e):
         if e.data == "close":
-            common.update_current_inventory()
-            self.page.window_destroy()
-            self.page.update()
-            os.abort()
+            try:
+                common.update_current_inventory()
+            except:
+                logger.exception('ERROR update_current_inventory()')
+            try:
+                self.page.window.destroy()
+            except:
+                logger.exception('ERROR update_current_inventory()')
 
     def build(self, page: ft.Page):
         self.page: ft.Page = page
@@ -75,7 +79,7 @@ class MainPage:
         self.page.window.width = 1500
         self.page.window.prevent_close = True
         self.page.window.on_window_event = self.__on_window_event
-        # self.page.window_always_on_top = True
+        self.page.window.on_event = self.__on_window_event
         self.create_login_page()
         self.on_login()
 

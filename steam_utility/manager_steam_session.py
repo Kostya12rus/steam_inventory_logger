@@ -356,6 +356,34 @@ class SteamWebSession:
 
         return market_items
 
+    def get_steam_token(self):
+        try:
+            response = self.steam_session.get('https://steamcommunity.com/my/', timeout=10)
 
+            token_pattern = re.compile(r'loyalty_webapi_token\s*=\s*"([^"]+)"')
+            match = token_pattern.search(response.text)
 
+            if match:
+                token = match.group(1).replace('&quot;', '')
+                return token
+            else:
+                return None
 
+        except:
+            return None
+
+    def stack_items(self, appid, fromitemid, destitemid, quantity, access_token):
+        try:
+            url = 'https://api.steampowered.com/IInventoryService/CombineItemStacks/v1/'
+            data = {
+                'access_token': access_token,
+                'appid': appid,
+                'fromitemid': fromitemid,
+                'destitemid': destitemid,
+                'quantity': quantity,
+                'steamid': self.steam_web.steam_id,
+            }
+            response = self.steam_session.post(url, data=data, timeout=10)
+            return response
+        except:
+            return None

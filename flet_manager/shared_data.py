@@ -67,6 +67,7 @@ class Games(Enum):
     Raspberry = 3048820
     Monkey = 3057390
     Poop = 1506810
+    Honey_Peach_Clicker = 3056370
 
 class CustomContextID(Enum):
     Steam = 6

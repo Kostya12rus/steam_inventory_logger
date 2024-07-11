@@ -1,5 +1,8 @@
+import datetime
+
 from . import InventoryWidget
 from .market_manager import MarketWidget
+from .inventory_stack_manager import InventoryStackWidget
 from .shared_data import common
 import flet as ft
 
@@ -13,12 +16,14 @@ class BodyManager(ft.Column):
 
         self.inventory_page = InventoryWidget()
         self.market_page = MarketWidget()
+        self.inventory_stack_page = InventoryStackWidget()
 
         self.body_widget = ft.Column(expand=True)
         self.setting_widget = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
 
         self.button_inventory = ft.FilledButton('Inventory', expand=True, on_click=self.on_go_inventory)
         self.button_market = ft.FilledButton('Market', expand=True, on_click=self.on_go_market)
+        self.button_inventory_stack = ft.FilledButton('InventoryStack', expand=True, on_click=self.on_go_inventory_stack)
 
         self.drop_down_game = ft.Dropdown(
             on_change=self.__on_change_game,
@@ -32,11 +37,34 @@ class BodyManager(ft.Column):
             value=common.get_current_appid_name()
         )
 
-        self.setting_widget.controls = [self.button_inventory, self.button_market, self.drop_down_game]
+        self.setting_widget.controls = [self.button_inventory, self.button_inventory_stack, self.button_market, self.drop_down_game]
         self.controls = [self.setting_widget, self.body_widget]
 
     def __on_change_game(self, *args):
         common.set_appid(self.drop_down_game.value)
+        if self.inventory_page.is_run:
+            self.inventory_page.items_history_column.controls.clear()
+            self.inventory_page.items_price_column.controls.clear()
+            self.inventory_page.update()
+            common.next_updated_inventory = datetime.datetime.min
+            self.inventory_page.update_history()
+            self.inventory_page.update_datagram()
+            self.inventory_page.update()
+        if self.market_page.is_run:
+            self.market_page.items_column.rows.clear()
+            self.market_page.update()
+            common.next_updated_market_list = datetime.datetime.min
+            self.market_page.update_widget()
+            self.market_page.update()
+        if self.inventory_stack_page.is_run:
+            self.inventory_stack_page.inventory = []
+            self.inventory_stack_page.inventory_table_widget.rows = []
+            self.inventory_stack_page.inventory_table_widget.update()
+
+
+    def on_go_inventory_stack(self, *args):
+        self.body_widget.controls = [self.inventory_stack_page]
+        self.body_widget.update()
 
     def on_go_inventory(self, *args):
         self.body_widget.controls = [self.inventory_page]

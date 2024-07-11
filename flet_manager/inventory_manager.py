@@ -15,13 +15,13 @@ class DialogSell(ft.AlertDialog):
         super().__init__()
         self.isolated = True
         self.expand = True
+        self.item_id = None
 
         self.last_updated = datetime.datetime.now()
         self.item_data = item_data
         self.market_hash_name = self.item_data.get('market_hash_name')
         self.all_item_in_inventary = [item for item in common.inventory.inventory
                                       if item.get('rgDescriptions', {}).get('market_hash_name', "") == self.market_hash_name]
-        self.item_id = self.load_item_nameid()
         self.itemordershistogram = {}
         self.item_count = int(item_data.get('count', 1))
 
@@ -190,6 +190,10 @@ class DialogSell(ft.AlertDialog):
             return item_nameid
 
     def load_itemordershistogram(self):
+        if not self.item_id:
+            self.item_id = self.load_item_nameid()
+        if not self.item_id: return
+
         return common.session.fetch_market_itemordershistogram(currency=common.default_currency, item_nameid=self.item_id)
 
     def create_title(self):
@@ -265,16 +269,16 @@ class DialogSell(ft.AlertDialog):
         while self.open:
             try:
                 self.update_widget()
+                self.update()
             except:
                 pass
-            self.update()
             time.sleep(1)
 
 
 class InventoryWidget(ft.Row):
     def __init__(self):
         super().__init__()
-        self.__is_run = False
+        self.is_run = False
         self.isolated = True
         self.expand = True
         self.alignment = ft.MainAxisAlignment.START
@@ -353,11 +357,11 @@ class InventoryWidget(ft.Row):
         common.set_current_inventory()
 
     def did_mount(self):
-        self.__is_run = True
+        self.is_run = True
         threading.Thread(target=self.__update).start()
 
     def will_unmount(self):
-        self.__is_run = False
+        self.is_run = False
 
     def update_widget(self):
         if common.dialog_is_open: return
@@ -367,7 +371,7 @@ class InventoryWidget(ft.Row):
         self.update_history()
         self.update_datagram()
     def __update(self):
-        while self.__is_run:
+        while self.is_run:
             try:
                 self.update_widget()
                 self.update()

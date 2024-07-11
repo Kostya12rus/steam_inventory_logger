@@ -1,6 +1,6 @@
-pyinstaller
 requests
 loguru
-flet
 rsa
 cryptography
+flet==0.23.2
+pyinstaller

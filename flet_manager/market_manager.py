@@ -60,13 +60,15 @@ class Item:
     def icon_url(self) -> str:
        return f'https://community.akamai.steamstatic.com/economy/image/{self.asset_description.icon_url}/330x192?allow_animated=1'
     def market_url(self) -> str:
-       return f'https://steamcommunity.com/market/listings/{self.asset_description.appid}/{self.asset_description.market_hash_name}'
+        return f'https://steamcommunity.com/market/listings/{self.asset_description.appid}/{self.asset_description.market_hash_name}'
     def market_hash_name(self) -> str:
         return self.asset_description.market_hash_name
     def get_delta(self, old_item: 'Item'):
         return ItemDelta(self, old_item)
     def color(self):
         return f'#{self.asset_description.name_color}' if self.asset_description.name_color else ''
+    def is_current_game(self, app_id: int):
+        return str(self.asset_description.appid) == str(app_id)
 
 class ItemDelta:
     def __init__(self, now_item: Item, old_item: Item):
@@ -105,16 +107,19 @@ class ItemDelta:
                 f"Цена: {self.old_item.sell_price_text} -> {self.now_item.sell_price_text} ({self.__generate_sell_price_text()}) [{self.__generate_sell_price_percent():.2f}%]\n"
                 f"Кол-во: {self.old_item.sell_listings}шт. -> {self.now_item.sell_listings}шт. ({self.sell_listings}шт.) [{self.__generate_sell_listings_percent():.2f}%]")
 
+
 class History:
     def __init__(self, history_dict: dict):
         self.time_update = history_dict.get('time_update', datetime.datetime.min)
         self.items = [Item(i) for i in history_dict.get('items', [])]
 
     def get_list_market_hash_name(self) -> set:
-        return {item.market_hash_name() for item in self.items if not item.is_bug_item()}
+        return {item.market_hash_name() for item in self.items if not item.is_bug_item() and item.is_current_game(common.app_id)}
 
     def get_item_from_market_hash_name(self, market_hash_name: str) -> Item:
-        return next((i for i in self.items if not i.is_bug_item() and i.market_hash_name() == market_hash_name), Item())
+        return next((i for i in self.items if not i.is_bug_item() and
+                     i.market_hash_name() == market_hash_name and
+                     i.is_current_game(common.app_id)), Item())
 
 class ListHistory:
     def __init__(self):
@@ -319,10 +324,11 @@ class MarketItemListTable(ft.DataTable):
             self.items_list[market_hash_name].update_data(now_history, last_history, hour_history, day_history)
         self.update()
 
+
 class MarketWidget(ft.Row):
     def __init__(self):
         super().__init__()
-        self.__is_run = False
+        self.is_run = False
         self.isolated = True
         self.expand = True
         self.alignment = ft.MainAxisAlignment.START
@@ -344,12 +350,12 @@ class MarketWidget(ft.Row):
         self.history_column.controls.append(self.items_history_column)
 
     def will_unmount(self):
-        self.__is_run = False
+        self.is_run = False
     def did_mount(self):
-        self.__is_run = True
+        self.is_run = True
         threading.Thread(target=self.__update).start()
     def __update(self):
-        while self.__is_run:
+        while self.is_run:
             try:
                 self.update_widget()
                 self.update()
