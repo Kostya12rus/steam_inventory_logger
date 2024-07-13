@@ -3,6 +3,7 @@ import datetime
 from . import InventoryWidget
 from .market_manager import MarketWidget
 from .inventory_stack_manager import InventoryStackWidget
+from .craft_manager import CraftManagerWidget
 from .shared_data import common
 import flet as ft
 
@@ -17,6 +18,7 @@ class BodyManager(ft.Column):
         self.inventory_page = InventoryWidget()
         self.market_page = MarketWidget()
         self.inventory_stack_page = InventoryStackWidget()
+        self.craft_manager_page = CraftManagerWidget()
 
         self.body_widget = ft.Column(expand=True)
         self.setting_widget = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
@@ -24,6 +26,7 @@ class BodyManager(ft.Column):
         self.button_inventory = ft.FilledButton('Inventory', expand=True, on_click=self.on_go_inventory)
         self.button_market = ft.FilledButton('Market', expand=True, on_click=self.on_go_market)
         self.button_inventory_stack = ft.FilledButton('InventoryStack', expand=True, on_click=self.on_go_inventory_stack)
+        self.button_craft_manager = ft.FilledButton('CraftManager', expand=True, on_click=self.on_go_craft_manager)
 
         self.drop_down_game = ft.Dropdown(
             on_change=self.__on_change_game,
@@ -37,7 +40,10 @@ class BodyManager(ft.Column):
             value=common.get_current_appid_name()
         )
 
-        self.setting_widget.controls = [self.button_inventory, self.button_inventory_stack, self.button_market, self.drop_down_game]
+        self.setting_widget.controls = [self.button_inventory, self.button_inventory_stack,
+                                        self.button_market,
+                                        # self.button_craft_manager,
+                                        self.drop_down_game]
         self.controls = [self.setting_widget, self.body_widget]
 
     def __on_change_game(self, *args):
@@ -56,11 +62,13 @@ class BodyManager(ft.Column):
             common.next_updated_market_list = datetime.datetime.min
             self.market_page.update_widget()
             self.market_page.update()
-        if self.inventory_stack_page.is_run:
-            self.inventory_stack_page.inventory = []
-            self.inventory_stack_page.inventory_table_widget.rows = []
-            self.inventory_stack_page.inventory_table_widget.update()
+        self.inventory_stack_page.update_clear()
+        self.craft_manager_page.update_clear()
 
+
+    def on_go_craft_manager(self, *args):
+        self.body_widget.controls = [self.craft_manager_page]
+        self.body_widget.update()
 
     def on_go_inventory_stack(self, *args):
         self.body_widget.controls = [self.inventory_stack_page]

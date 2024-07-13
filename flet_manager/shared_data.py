@@ -55,19 +55,14 @@ class Currency(Enum):
     NXP = 9001
 
 class Games(Enum):
+    EggSurprise = 3017120
     Banana = 2923300
     Cats = 2977660
-    CS2 = 730
-    EGG = 2784840
-    EggSurprise = 3017120
-    Steam = 753
     Tapple = 3047030
     Meh = 3065090
     Duck = 3057940
     Raspberry = 3048820
-    Monkey = 3057390
-    Poop = 1506810
-    Honey_Peach_Clicker = 3056370
+    Monsters = 3062260
 
 class CustomContextID(Enum):
     Steam = 6
@@ -118,8 +113,9 @@ class SharedClass:
         self.items_price = self.current_items_price.get(__currency, [])
         self.items_price_old = self.current_items_price_old.get(__currency, {})
 
-    def get_current_appid_name(self) -> list:
-        return next((game_name for game_name, app_id in self.games.items() if app_id == common.app_id), Games.EggSurprise.name)
+    def get_current_appid_name(self, find_appid: int = None) -> str:
+        if not find_appid: find_appid = common.app_id
+        return next((game_name for game_name, app_id in self.games.items() if app_id == find_appid), Games.EggSurprise.name)
 
     def get_current_currency_name(self) -> list:
         return next((currency for currency, currency_id in self.currencies.items() if currency_id == self.default_currency), Currency.USD.name)

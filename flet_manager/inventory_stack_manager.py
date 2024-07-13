@@ -71,7 +71,7 @@ class Item:
     def market_hash_name(self):
         return self.rg_descriptions.market_hash_name
     def color(self):
-        return self.rg_descriptions.name_color
+        return f'#{self.rg_descriptions.name_color}' if self.rg_descriptions.name_color else ''
     def get_amount(self):
         return int(self.amount)
     def market_url(self) -> str:
@@ -96,6 +96,7 @@ class InventoryStackWidget(ft.Column):
         self.inventory: list[Item] = []
         self.__steam_token = None
         self.__items_button_stack = {}
+        self.__is_loading = False
         self.spacing = 0
 
         self.title_widget_text = ft.Text('Инвентарь для объединения', size=24, color=ft.colors.BLUE, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER, expand=True)
@@ -119,8 +120,8 @@ class InventoryStackWidget(ft.Column):
         self.body_widget_column = ft.Column(expand=True, spacing=0, scroll=ft.ScrollMode.AUTO, alignment=ft.MainAxisAlignment.CENTER)
         self.body_widget_column.controls = [self.inventory_is_not_loaded, ft.Row(controls=[self.inventory_table_widget])]
 
-        self.update_inventory_widget_button = ft.FilledButton('Обновить инвентарь', on_click=self.__load_inventory)
-        self.start_all_stack_widget_button = ft.FilledButton('Объединить все предметы', expand=True, on_click=self.__stack_inventory)
+        self.update_inventory_widget_button = ft.FilledButton('Обновить инвентарь', expand=True, on_click=self.__load_inventory)
+        self.start_all_stack_widget_button = ft.FilledButton('Объединить все предметы', disabled=True, on_click=self.__stack_inventory)
         self.api_loaded_widget_button = ft.FilledButton('Токен загружается', disabled=True)
         buttons_widget_row = ft.Row(spacing=0, controls=[
             self.update_inventory_widget_button,
@@ -139,60 +140,88 @@ class InventoryStackWidget(ft.Column):
     def did_mount(self):
         self.is_run = True
         threading.Thread(target=self.__update).start()
-        self.update()
-
+        self.safe_update(self)
     def will_unmount(self):
         self.is_run = False
-
-    def update_widget(self):
-        pass
+    def safe_update(self, widget):
+        try:
+            if not widget: return
+            if not self.is_run: return
+            widget.update()
+        except:
+            logger.exception('Exception while updating widget')
+    def update_clear(self):
+        self.inventory = []
+        self.__items_button_stack = {}
+        self.inventory_table_widget.visible = False
+        self.inventory_table_widget.rows = []
+        self.safe_update(self.inventory_table_widget)
+        self.inventory_is_not_loaded.visible = True
+        self.safe_update(self.inventory_is_not_loaded)
     def __update(self):
         while self.is_run:
             try:
+                text_title = 'InventoryStack'
                 if not self.__steam_token:
                     self.__steam_token = common.session.get_steam_token()
                     if self.__steam_token:
                         self.api_loaded_widget_button.text = "Токен загружен"
-                        self.api_loaded_widget_button.update()
-                if not self.inventory and (not self.inventory_is_not_loaded.visible or self.inventory_table_widget.visible):
-                    self.inventory_is_not_loaded.visible = True
-                    self.inventory_is_not_loaded.update()
-                    self.inventory_table_widget.visible = False
-                    self.inventory_table_widget.update()
+                        self.safe_update(self.api_loaded_widget_button)
+                if not self.__is_loading:
+                    if not self.inventory:
+                        text_title = f'[{text_title}] Инвентарь не загружен. Обновите его вручную.'
+                        if not self.inventory_is_not_loaded.visible:
+                            self.inventory_is_not_loaded.visible = True
+                            self.safe_update(self.inventory_is_not_loaded)
 
-                    self.start_all_stack_widget_button.disabled = True
-                    self.start_all_stack_widget_button.expand = False
-                    self.start_all_stack_widget_button.update()
-                    self.update_inventory_widget_button.expand = True
-                    self.update_inventory_widget_button.update()
+                        if self.inventory_table_widget.visible:
+                            self.inventory_table_widget.visible = False
+                            self.safe_update(self.inventory_table_widget)
 
-                if self.inventory and (self.inventory_is_not_loaded.visible or not self.inventory_table_widget.visible):
-                    self.inventory_is_not_loaded.visible = False
-                    self.inventory_is_not_loaded.update()
-                    self.inventory_table_widget.visible = True
-                    self.inventory_table_widget.update()
+                        if not self.start_all_stack_widget_button.disabled or self.start_all_stack_widget_button.expand:
+                            self.start_all_stack_widget_button.disabled = True
+                            self.start_all_stack_widget_button.expand = False
+                            self.safe_update(self.start_all_stack_widget_button)
 
-                    self.start_all_stack_widget_button.disabled = False
-                    self.start_all_stack_widget_button.expand = True
-                    self.start_all_stack_widget_button.update()
-                    self.update_inventory_widget_button.expand = False
-                    self.update_inventory_widget_button.update()
+                        if not self.update_inventory_widget_button.expand:
+                            self.update_inventory_widget_button.expand = True
+                            self.safe_update(self.update_inventory_widget_button)
+                    else:
+                        amount = sum([_item.get_amount() for _item in self.inventory])
+                        text_title = f'[{text_title}] Предметов всего: {amount}шт. Занимают слотов: {len(self.inventory)}шт.'
 
-                if self.inventory and not self.inventory_table_widget.rows:
-                    self.__create_items_table()
+                        if self.inventory_is_not_loaded.visible:
+                            self.inventory_is_not_loaded.visible = False
+                            self.safe_update(self.inventory_is_not_loaded)
 
-                text_title = 'InventoryStack'
-                if self.inventory:
-                    amount = sum([_item.get_amount() for _item in self.inventory])
-                    text_title = f'[{text_title}] Предметов: {amount}шт. Занимаю слотов: {len(self.inventory)}шт.'
+                        if not self.inventory_table_widget.visible:
+                            self.inventory_table_widget.visible = True
+                            self.safe_update(self.inventory_table_widget)
+
+                        if self.start_all_stack_widget_button.disabled or not self.start_all_stack_widget_button.expand:
+                            self.start_all_stack_widget_button.disabled = False
+                            self.start_all_stack_widget_button.expand = True
+                            self.safe_update(self.start_all_stack_widget_button)
+
+                        if self.update_inventory_widget_button.expand:
+                            self.update_inventory_widget_button.expand = False
+                            self.safe_update(self.update_inventory_widget_button)
+
+                        if not self.inventory_table_widget.rows:
+                            self.__create_items_table()
+
+                    if self.update_inventory_widget_button.disabled and not self.start_all_stack_widget_button.disabled:
+                        self.start_all_stack_widget_button.disabled = True
+                        self.safe_update(self.start_all_stack_widget_button)
+
                 if self.page.title != text_title:
                     self.page.title = text_title
-                    self.page.update()
-
+                    self.safe_update(self.page)
             except:
-                logger.exception('Eroor')
+                logger.exception('ERROR UPDATE InventoryStack')
             finally:
                 time.sleep(1)
+
 
     def __create_item_row(self, items: list[Item]):
         item = items[0]
@@ -209,13 +238,13 @@ class InventoryStackWidget(ft.Column):
         item_widget_datarow.cells.append(ft.DataCell(item_name_widget_container))
 
         amount = sum([_item.get_amount() for _item in items])
-        amount = ft.Text(f'{amount} шт.', color=item.color(), size=15, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, text_align=ft.TextAlign.RIGHT)
+        amount = ft.Text(f'{amount} шт.', size=15, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, text_align=ft.TextAlign.RIGHT)
         item_widget_datarow.cells.append(ft.DataCell(amount))
 
-        amount_items = ft.Text(f'{len(items)} шт.', color='', size=15, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, text_align=ft.TextAlign.RIGHT)
+        amount_items = ft.Text(f'{len(items)} шт.', size=15, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, text_align=ft.TextAlign.RIGHT)
         item_widget_datarow.cells.append(ft.DataCell(amount_items))
 
-        end_ban_marketable = item.end_ban_marketable()
+        end_ban_marketable = item.rg_descriptions.cache_expiration
         end_ban_marketable_text = end_ban_marketable if end_ban_marketable else " "
         ban_items = ft.Text(f'{end_ban_marketable_text}', color=ft.colors.RED, size=15, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True, text_align=ft.TextAlign.RIGHT)
         item_widget_datarow.cells.append(ft.DataCell(ban_items))
@@ -231,43 +260,48 @@ class InventoryStackWidget(ft.Column):
         self.inventory_table_widget.rows = []
 
         items_classid = {}
-
         for item in self.inventory:
             if item.classid not in items_classid:
                 items_classid[item.classid] = {}
             if item.instanceid not in items_classid[item.classid]:
                 items_classid[item.classid][item.instanceid] = []
             items_classid[item.classid][item.instanceid].append(item)
+        items_list = [item_list for _items_classid in items_classid.values() for _item_instanceid, item_list in _items_classid.items()]
+        items_list.sort(key=lambda x: len(x), reverse=True)
 
-        for _, dict_items in items_classid.items():
-            for _, items in dict_items.items():
-                item_row = self.__create_item_row(items)
-                self.inventory_table_widget.rows.append(item_row)
-        self.inventory_table_widget.update()
+        for _items in items_list:
+            item_row = self.__create_item_row(_items)
+            self.inventory_table_widget.rows.append(item_row)
+        self.safe_update(self.inventory_table_widget)
 
     def __load_inventory(self, *args):
         try:
+            self.__is_loading = True
             self.update_inventory_widget_button.text = 'Инвентарь обновляется'
             self.update_inventory_widget_button.disabled = True
-            self.update_inventory_widget_button.update()
+            self.safe_update(self.update_inventory_widget_button)
+            self.start_all_stack_widget_button.disabled = True
+            self.safe_update(self.start_all_stack_widget_button)
             inventory = common.session.get_inventory_items(appid=common.app_id, context_id=common.get_contextid_appid())
             if inventory:
                 new_inventory = []
                 for item in inventory.inventory:
                     new_inventory.append(Item(item))
-                self.inventory = new_inventory
 
+                self.inventory = new_inventory
                 self.__items_button_stack = {}
-                self.inventory_table_widget.rows = []
-                self.inventory_table_widget.update()
+                self.__create_items_table()
         except:
             logger.exception('InventoryStackWidget')
         finally:
             time.sleep(5)
             self.update_inventory_widget_button.text = 'Обновить инвентарь'
             self.update_inventory_widget_button.disabled = False
-            if self.is_run:
-                self.update_inventory_widget_button.update()
+            self.safe_update(self.update_inventory_widget_button)
+            if self.inventory:
+                self.start_all_stack_widget_button.disabled = False
+                self.safe_update(self.start_all_stack_widget_button)
+            self.__is_loading = False
 
     def __stack_items(self, items: list[Item]):
         if not items: return
@@ -276,78 +310,72 @@ class InventoryStackWidget(ft.Column):
         stack_item_button: ft.FilledButton = self.__items_button_stack[f'{start_item.classid}_{start_item.instanceid}']
         if stack_item_button and not stack_item_button.disabled:
             stack_item_button.disabled = True
-            stack_item_button.color = ft.colors.GREEN
-            stack_item_button.update()
-        if len(items) <= 1: return
+            stack_item_button.bgcolor = ft.colors.GREEN
+            self.safe_update(stack_item_button)
 
-        end_ban_marketable = start_item.end_ban_marketable()
-        if end_ban_marketable:
-            items.sort(key=lambda x: x.pos, reverse=True)
-        else:
-            items.sort(key=lambda x: x.pos)
-        top_item = items[0]
+        if len(items) > 1:
+            items.sort(key=lambda x: x.pos, reverse=True) if start_item.end_ban_marketable() else items.sort(key=lambda x: x.pos)
+            top_item = items[0]
 
-        for item in items:
-            if not self.is_run: return
-            if item.id == top_item.id: continue
-            t = threading.Thread(target=common.session.stack_items, args=(
-                item.rg_descriptions.appid, item.id, top_item.id, item.amount, self.__steam_token
-            ))
-            t.start()
-            time.sleep(0.05)
+            for item in items:
+                if not self.is_run: break
+                if item.id == top_item.id: continue
+                t = threading.Thread(target=common.session.stack_items, args=(
+                    item.rg_descriptions.appid, item.id, top_item.id, item.amount, self.__steam_token
+                ))
+                t.start()
+                time.sleep(0.05)
 
-        if stack_item_button and not stack_item_button.color == ft.colors.GREEN:
-            stack_item_button.color = None
-            stack_item_button.update()
+        if stack_item_button and not stack_item_button.bgcolor == ft.colors.GREEN:
+            stack_item_button.bgcolor = None
+            self.safe_update(stack_item_button)
 
     def __stack_inventory(self, *args):
         try:
+            self.__is_loading = True
             self.update_inventory_widget_button.disabled = True
-            self.update_inventory_widget_button.update()
+            self.safe_update(self.update_inventory_widget_button)
             self.start_all_stack_widget_button.text = "Начинаю объединять все предметы"
             self.start_all_stack_widget_button.disabled = True
-            self.start_all_stack_widget_button.update()
+            self.safe_update(self.start_all_stack_widget_button)
             if not self.inventory: return
             self.inventory.sort(key=lambda x: (x.classid, x.instanceid))
 
-            items_classid = {}
+            total_items = len(self.inventory)
 
+            items_classid = {}
             for item in self.inventory:
                 if item.classid not in items_classid:
                     items_classid[item.classid] = {}
                 if item.instanceid not in items_classid[item.classid]:
                     items_classid[item.classid][item.instanceid] = []
                 items_classid[item.classid][item.instanceid].append(item)
+            items_list = [item_list for _items_classid in items_classid.values() for _item_instanceid, item_list in _items_classid.items()]
+            items_list.sort(key=lambda x: len(x), reverse=True)
 
-            total_items = len(self.inventory)
             iter_items = 0
             self.start_all_stack_widget_button.text = f"Найдено {total_items}шт. предметов"
-            self.start_all_stack_widget_button.update()
+            self.safe_update(self.start_all_stack_widget_button)
 
-            for _, dict_items in items_classid.items():
+            for _items in items_list:
                 if not self.is_run: return
-                for _, items in dict_items.items():
-                    if not self.is_run: return
-                    percent = round(iter_items / total_items * 100, 2)
-                    top_item: Item = items[0]
-                    self.start_all_stack_widget_button.text = f"Прогресс {iter_items}/{total_items} [{percent}%] предмет {top_item.name()}"
-                    self.start_all_stack_widget_button.update()
-
-                    self.__stack_items(items)
-                    iter_items += len(items)
+                percent = round(iter_items / total_items * 100, 2)
+                top_item: Item = _items[0]
+                self.start_all_stack_widget_button.text = f"Прогресс {iter_items}/{total_items} [{percent}%] предмет {top_item.name()}"
+                self.safe_update(self.start_all_stack_widget_button)
+                self.__stack_items(_items)
+                iter_items += len(_items)
         except:
             logger.exception('InventoryStackWidget')
         finally:
             self.start_all_stack_widget_button.text = f"Объединение предметов завершено"
-            if self.page:
-                self.start_all_stack_widget_button.update()
+            self.safe_update(self.start_all_stack_widget_button)
             time.sleep(5)
             self.start_all_stack_widget_button.text = f"Ожидайте загружаю инвентарь."
-            if self.is_run:
-                self.start_all_stack_widget_button.update()
-                self.__load_inventory()
+            self.safe_update(self.start_all_stack_widget_button)
+            self.__load_inventory()
             self.start_all_stack_widget_button.text = "Объединить все предметы"
             self.start_all_stack_widget_button.disabled = False
-            if self.is_run:
-                self.start_all_stack_widget_button.update()
+            self.safe_update(self.start_all_stack_widget_button)
+            self.__is_loading = False
 

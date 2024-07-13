@@ -41,6 +41,7 @@ class Setting:
     current_items_price = make_property('current_items_price', dict, {})
     current_items_price_old = make_property('current_items_price_old', dict, {})
     items_nameid = make_property('items_nameid', dict, {})
+    craft_system = make_property('craft_system', dict, {})
 
 
 setting = Setting()
