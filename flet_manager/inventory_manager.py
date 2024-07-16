@@ -329,9 +329,9 @@ class InventoryWidget(ft.Row):
         self.history_column.controls.append(self.items_history_column)
 
     def test(self, *args):
-        market = common.session.get_game_market_list(appid=common.app_id)
+        # market = common.session.get_game_market_list(appid=common.app_id)
         print()
-        # inventory = common.session.get_inventory_items(appid=common.app_id, context_id=common.get_context_id())
+        # inventory = common.session.get_inventory_items(appid=common.app_id, context_id=common.get_contextid_appid())
         # print()
         # if not inventory:
         #     print("inventory не загружен")
@@ -340,13 +340,13 @@ class InventoryWidget(ft.Row):
         # if not tradable_inventory:
         #     print("tradable_inventory не загружен")
         #     return
-        # # tradable_url = 'https://steamcommunity.com/tradeoffer/new/?partner=341988637&token=GLFg2wq2'
-        # tradable_url = None
+        # tradable_url = 'https://steamcommunity.com/tradeoffer/new/?partner=342895116&token=OmicYz_i'
+        # # tradable_url = None
         # if not tradable_url:
         #     print("tradable_url не загружен")
         #     return
-        # status = False
-        # # status = common.session.trade_send(trade_url=tradable_url, items=tradable_inventory)
+        # # status = False
+        # status = common.session.trade_send(trade_url=tradable_url, items=tradable_inventory)
         # print(status)
 
     def __on_change_currencies(self, e):
@@ -728,5 +728,4 @@ class InventoryWidget(ft.Row):
         ]
         self.items_price_column.controls.insert(1, row_total_info)
         self.items_price_column.controls.insert(2, ft.VerticalDivider(2))
-
 

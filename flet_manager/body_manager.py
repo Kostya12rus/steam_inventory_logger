@@ -40,9 +40,10 @@ class BodyManager(ft.Column):
             value=common.get_current_appid_name()
         )
 
-        self.setting_widget.controls = [self.button_inventory, self.button_inventory_stack,
+        self.setting_widget.controls = [self.button_inventory,
+                                        self.button_inventory_stack,
                                         self.button_market,
-                                        # self.button_craft_manager,
+                                        self.button_craft_manager,
                                         self.drop_down_game]
         self.controls = [self.setting_widget, self.body_widget]
 
