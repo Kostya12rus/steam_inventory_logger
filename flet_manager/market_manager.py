@@ -257,6 +257,7 @@ class MarketItemListTable(ft.DataTable):
     def __init__(self):
         super().__init__([])
         self.alignment = ft.MainAxisAlignment.START
+        self.expand = True
         self.column_spacing = 5
         self.vertical_lines = ft.BorderSide(1)
         self.heading_row_height = 50
@@ -267,6 +268,7 @@ class MarketItemListTable(ft.DataTable):
         self.sort_descending = True
         self.name_filter = ''
         self.items_list: dict[str, ItemData] = {}
+        self.last_update = datetime.datetime.min
 
         title_column_name_text_widget = ft.Text('Предмет', size=18)
         title_column_name_textfield_widget = ft.TextField(label='Name Filter', dense=True, content_padding=10, text_align=ft.TextAlign.LEFT,
@@ -306,12 +308,17 @@ class MarketItemListTable(ft.DataTable):
 
         self.columns = [title_column_name_widget, t_c_n, t_c_l, t_c_h, t_c_d]
 
+    def safe_update(self):
+        try:
+            self.update()
+        except:
+            logger.exception('Exception while updating widget')
     def __on_change_name_filter(self, name_filter: str = ''):
         self.name_filter = name_filter
         items_list: list[ItemData] = [item for market_hash_name, item in self.items_list.items()]
 
         self.rows = [item.item_widget_datarow for item in items_list if self.name_filter.lower() in item.item_name_widget_text.value.lower()]
-        self.update()
+        self.safe_update()
 
     def __on_change_sort(self, sort_type: str = '', update_sort: bool = False):
         if not update_sort:
@@ -341,7 +348,7 @@ class MarketItemListTable(ft.DataTable):
             items_list.sort(key=lambda item: self.extract_number(item.day_item_count_widget_text.value), reverse=self.sort_descending)
 
         self.rows = [item.item_widget_datarow for item in items_list]
-        self.update()
+        self.safe_update()
     @staticmethod
     def extract_number(text):
         match = re.search(r'[-+]?\d[\d\s,]*\.?\d*|\d*\.?\d+', text)
@@ -354,6 +361,7 @@ class MarketItemListTable(ft.DataTable):
     def create_update_items(self):
         list_history = ListHistory()
         now_history = list_history.get_latest_history()
+        self.last_update = now_history.time_update
         last_history = list_history.get_previous_history()
         hour_history = list_history.get_history_hours_ago(hours_ago=1)
         day_history = list_history.get_history_hours_ago(hours_ago=24)
@@ -367,176 +375,144 @@ class MarketItemListTable(ft.DataTable):
                 self.items_list[market_hash_name] = item_data
                 self.rows.append(item_data.item_widget_datarow)
             self.items_list[market_hash_name].update_data(now_history, last_history, hour_history, day_history)
-        self.update()
+        self.safe_update()
         self.__on_change_sort(self.sort_type, update_sort=True)
 
-class MarketWidget(ft.Row):
+
+class MarketWidget(ft.Column):
     def __init__(self):
         super().__init__()
         self.is_run = False
         self.isolated = True
         self.expand = True
         self.alignment = ft.MainAxisAlignment.START
-        self.items_datagram = {}
+        self.spacing = 0
+        self.__last_app_id = 0
+        self.__last_time_update = datetime.datetime.min
 
-        self.item_list_column = ft.Column(expand=True)
-        self.history_column = ft.Column()
-        self.controls = [self.item_list_column, ft.VerticalDivider(), self.history_column]
+        self.title_widget_text = ft.Text('Торговая площадка. Список предметов:', size=24, color=ft.colors.BLUE, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER, expand=True)
+        body_title_widget_row = ft.Row(controls=[self.title_widget_text], alignment=ft.MainAxisAlignment.CENTER, run_spacing=0)
 
-        self.item_list_column_title = ft.Text('Торговая площадка. Список предметов:', size=24, color=ft.colors.BLUE, weight=ft.FontWeight.BOLD)
-        self.item_list_column.controls.append(ft.Row([self.item_list_column_title], alignment=ft.MainAxisAlignment.CENTER))
+        self.table_widget = MarketItemListTable()
+        self.is_not_loaded = ft.Row(alignment=ft.MainAxisAlignment.CENTER, visible=False,
+                                    controls=[ft.FilledButton("Магазин не загружен", disabled=True, expand=True)])
+        self.body_widget_column = ft.Column(expand=True, spacing=0, scroll=ft.ScrollMode.AUTO, alignment=ft.MainAxisAlignment.CENTER)
+        self.body_widget_column.controls = [self.is_not_loaded, ft.Row(controls=[self.table_widget])]
 
-        self.history_column_title = ft.Text('История:', size=24, color=ft.colors.BLUE, weight=ft.FontWeight.BOLD)
-        self.history_column.controls.append(ft.Row([self.history_column_title], alignment=ft.MainAxisAlignment.CENTER))
+        self.update_widget_button = ft.FilledButton('Обновить список предметов', expand=True, on_click=self.__load_market)
+        self.info_widget_button = ft.FilledButton('Обновлялся: не загружен', disabled=True)
+        buttons_widget_row = ft.Row(spacing=0, controls=[
+            self.update_widget_button,
+            self.info_widget_button,
+        ])
 
-        self.items_column = MarketItemListTable()
-        self.item_list_column.controls.append(ft.Column(scroll=ft.ScrollMode.AUTO, spacing=1, expand=True, controls=[self.items_column]))
-        self.items_history_column = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True, spacing=1)
-        self.history_column.controls.append(self.items_history_column)
+        self.controls = [
+            body_title_widget_row,
+            ft.Divider(),
+            self.body_widget_column,
+            ft.Divider(),
+            buttons_widget_row,
+        ]
 
-    def will_unmount(self):
-        self.is_run = False
     def did_mount(self):
         self.is_run = True
         threading.Thread(target=self.__update).start()
+        self.safe_update(self)
+        self.update_clear()
+
+    def will_unmount(self):
+        self.is_run = False
+    def safe_update(self, widget):
+        try:
+            if not widget: return
+            if not self.is_run: return
+            widget.update()
+        except:
+            logger.exception('Exception while updating widget')
+    def update_clear(self):
+        if self.__last_app_id != common.app_id:
+            self.__last_app_id = common.app_id
+            self.__last_time_update = datetime.datetime.min
+            self.table_widget.sort_type = 'count_now'
+            self.table_widget.sort_descending = True
+            self.table_widget.name_filter = ''
+            self.table_widget.items_list = {}
+            self.table_widget.rows = []
+            self.safe_update(self.table_widget)
+            self.__load_history(is_disable_button=True)
+
+    def __load_history(self, is_disable_button=False):
+        if is_disable_button:
+            self.update_widget_button.disabled = True
+        self.update_widget_button.text = 'Загружаю историю Торговой площадки...'
+        self.safe_update(self.update_widget_button)
+
+        self.table_widget.create_update_items()
+        self.safe_update(self.table_widget)
+
+        if self.table_widget.last_update != datetime.datetime.min:
+            self.__last_time_update = self.table_widget.last_update
+            text_loaded = f'Обновлялся: обновлено {self.__last_time_update.strftime("%d.%m.%Y %H:%M:%S")}'
+            if self.info_widget_button.text != text_loaded:
+                self.info_widget_button.text = text_loaded
+                self.safe_update(self.info_widget_button)
+
+        if is_disable_button:
+            self.update_widget_button.disabled = False
+        self.update_widget_button.text = 'Обновить список предметов'
+        self.safe_update(self.update_widget_button)
+
+    def __load_market(self, event):
+        self.update_widget_button.disabled = True
+        self.update_widget_button.text = 'Обновляется...'
+        self.safe_update(self.update_widget_button)
+
+        common.update_market_list()
+        self.__last_time_update = datetime.datetime.now()
+        self.__load_history()
+
+        time.sleep(5)
+        self.update_widget_button.disabled = False
+        self.update_widget_button.text = 'Обновить список предметов'
+        self.safe_update(self.update_widget_button)
+
     def __update(self):
         while self.is_run:
             try:
-                self.update_widget()
-                self.update()
-                self.page.update()
+                text_title = 'SteamMarket: '
+                if self.__last_time_update == datetime.datetime.min:
+                    text_title += 'не обновлено'
+                    text_not_loaded = 'Обновлялся: не обновлено'
+                    if self.info_widget_button.text != text_not_loaded:
+                        self.info_widget_button.text = text_not_loaded
+                        self.safe_update(self.info_widget_button)
+                else:
+                    second_ago = f'обновлено {self.__last_time_update.strftime("%d.%m.%Y %H:%M:%S")}'
+                    text_title += second_ago
+                    text_loaded = f'Обновлялся: {second_ago}'
+                    if self.info_widget_button.text != text_loaded:
+                        self.info_widget_button.text = text_loaded
+                        self.safe_update(self.info_widget_button)
+
+                if not self.table_widget.rows:
+                    if self.table_widget.visible:
+                        self.table_widget.visible = False
+                        self.safe_update(self.table_widget)
+                    if not self.is_not_loaded.visible:
+                        self.is_not_loaded.visible = True
+                        self.safe_update(self.is_not_loaded)
+                else:
+                    if self.is_not_loaded.visible:
+                        self.is_not_loaded.visible = False
+                        self.safe_update(self.is_not_loaded)
+                    if not self.table_widget.visible:
+                        self.table_widget.visible = True
+                        self.safe_update(self.table_widget)
+
+                if self.page.title != text_title:
+                    self.page.title = text_title
+                    self.safe_update(self.page)
             except:
-                logger.exception('Exception in market update')
+                logger.exception('ERROR UPDATE InventoryStack')
             finally:
-                time.sleep(10)
-
-    def update_widget(self):
-        if not common.debug_test:
-            common.update_market_list()
-        # self.update_history()
-        self.items_column.create_update_items()
-
-
-    @staticmethod
-    def __get_item_from_history(market_hash_name: str, history: dict) -> dict:
-        return next((i for i in history.get('items', []) if i.get('hash_name', '') == market_hash_name and
-                     i.get('asset_description', {}).get('market_hash_name', '') == market_hash_name), {})
-    @staticmethod
-    def __get_history_list_name(history: dict) -> set:
-        items = history.get('items', [])
-        return {item.get('hash_name') for item in items if item.get('hash_name') == item.get('asset_description', {}).get('market_hash_name')}
-    @staticmethod
-    def __replace_number_in_currency(original_str, new_number):
-        pattern = r'\d{1,3}(?:\s?\d{3})*(?:[,.]\d+)?'
-        return re.sub(pattern, new_number, original_str)
-
-    def find_change_history(self, now_history: dict, old_history: dict):
-        if not now_history and not old_history: return None
-        now_history_datetime = now_history.get('time_update', datetime.datetime.min)
-        old_history_datetime = old_history.get('time_update', datetime.datetime.min)
-
-        column_period_widget = ft.Column(spacing=0)
-        column_period_widget.controls.append(ft.Text(f'{now_history_datetime.strftime("%d.%m.%Y %H:%M")}-{old_history_datetime.strftime("%d.%m.%Y %H:%M")}'))
-
-        common_hash_names = self.__get_history_list_name(now_history) & self.__get_history_list_name(old_history)
-        if not common_hash_names: return None
-
-        for market_hash_name in common_hash_names:
-            item_column_info = ft.Column(spacing=0)
-
-            now_history_item = self.__get_item_from_history(market_hash_name, now_history)
-            old_history_item = self.__get_item_from_history(market_hash_name, old_history)
-
-            old_sell_price_text = old_history_item.get('sell_price_text', '')
-            old_sell_price = old_history_item.get('sell_price', 0)
-            old_sell_listings = old_history_item.get('sell_listings', 0)
-
-            now_sell_price_text = now_history_item.get('sell_price_text', '')
-            now_sell_price = now_history_item.get('sell_price', 0)
-            now_sell_listings = now_history_item.get('sell_listings', 0)
-
-            asset_description = now_history_item.get('asset_description', old_history_item.get('asset_description', {}))
-            item_column_info.tooltip = f'Цена: {old_sell_price_text} -> {now_sell_price_text}\nКол-во: {old_sell_listings}шт. -> {now_sell_listings}шт.'
-
-            row_item_info = ft.Row(spacing=1, expand=True)
-            item_name_widget = ft.Container(
-                ink=True, content=row_item_info, margin=0, padding=0,
-                url=f'https://steamcommunity.com/market/listings/{asset_description.get("appid", common.app_id)}/{market_hash_name}',
-            )
-            item_column_info.controls.append(item_name_widget)
-            icon_url = f'https://community.akamai.steamstatic.com/economy/image/{asset_description.get("icon_url", "")}/330x192?allow_animated=1'
-            row_item_info.controls.append(ft.Container(width=50, height=29, content=ft.Image(src=icon_url, width=50, height=29)))
-            item_color = asset_description.get('name_color')
-            item_name_widget_container = ft.Container(width=150, content=ft.Text(
-                f"{asset_description.get('name', ' ')}", color=f'#{item_color}' if item_color else '', overflow=ft.TextOverflow.ELLIPSIS))
-            row_item_info.controls.append(item_name_widget_container)
-
-            item_new_del_widget = None
-            item_change_widget = None
-            if not now_sell_price_text:
-                item_new_del_widget = ft.Column(spacing=0)
-                item_new_del_widget.controls.append(ft.Text('Предмет ушел с продажи', color=ft.colors.BLUE))
-                item_new_del_widget.controls.append(ft.Text(f'Цена: {old_sell_price_text} [{old_sell_listings} шт.]', color=ft.colors.RED))
-                item_column_info.controls.append(item_new_del_widget)
-            elif not old_sell_price_text:
-                item_new_del_widget = ft.Column(spacing=0)
-                item_new_del_widget.controls.append(ft.Text('Новый предмет в продаже', color=ft.colors.BLUE))
-                item_new_del_widget.controls.append(ft.Text(f'Цена: {now_sell_price_text} [{now_sell_listings} шт.]', color=ft.colors.GREEN))
-                item_column_info.controls.append(item_new_del_widget)
-            else:
-                def_price = now_sell_price - old_sell_price
-                def_count = now_sell_listings - old_sell_listings
-                if def_price == 0 and def_count == 0: continue
-                percent_change_price = abs((now_sell_price / old_sell_price) - 1 if old_sell_price != 0 else 0)
-                percent_change_count = abs((now_sell_listings / old_sell_listings) - 1 if old_sell_listings != 0 else 0)
-
-                item_change_widget = ft.Column(spacing=0)
-                if percent_change_price >= 0.1:
-                    color = ft.colors.GREEN if def_price >= 0 else ft.colors.RED
-                    percent_change_price_text = self.__replace_number_in_currency(old_sell_price_text, f"{round(def_price / 100, 2):.2f}")
-                    item_change_widget.controls.append(ft.Text(f'Цена: {percent_change_price_text}[{round(percent_change_price*100, 2):.2f}%]', color=color))
-
-                if percent_change_count >= 0.1:
-                    color = ft.colors.GREEN if def_count >= 0 else ft.colors.RED
-                    item_change_widget.controls.append(ft.Text(f'Кол-во: {def_count}шт.[{round(percent_change_count*100, 2):.2f}%]', color=color))
-                if len(item_change_widget.controls) > 0:
-                    item_column_info.controls.append(item_change_widget)
-                    item_column_info.controls.append(ft.Divider(height=1))
-
-            is_item_new_del_widget = item_new_del_widget and len(item_new_del_widget.controls) > 0
-            is_item_change_widget = item_change_widget and len(item_change_widget.controls) > 0
-            if item_name_widget and (is_item_new_del_widget or is_item_change_widget):
-                column_period_widget.controls.append(item_column_info)
-
-        return column_period_widget if column_period_widget and len(column_period_widget.controls) > 1 else None
-
-    def update_history(self):
-        all_history = common.get_history_market_list()
-        if not all_history: return
-
-        start_time = datetime.datetime.now()
-        list_history = []
-
-        while True:
-            filtered_history = [h for h in all_history if h.get('time_update', datetime.datetime.min) <= start_time]
-            if not filtered_history: break
-            min_date_history = max(filtered_history, key=lambda x: x['time_update'])
-            list_history.append(min_date_history)
-            if len(list_history) >= 20: break
-            start_time = min_date_history['time_update'] - datetime.timedelta(minutes=60)
-
-        if not list_history: return
-        self.items_history_column.controls = []
-        now_history = None
-        for history in list_history:
-            if not now_history:
-                now_history = history
-                continue
-            history_change = self.find_change_history(now_history, history)
-            if history_change:
-                self.items_history_column.controls.append(history_change)
-                self.items_history_column.controls.append(ft.Divider(height=5))
-
-            now_history = history.copy()
-
-        self.items_history_column.update()
+                time.sleep(1)

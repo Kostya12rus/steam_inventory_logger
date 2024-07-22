@@ -63,6 +63,7 @@ class Games(Enum):
     Duck = 3057940
     Raspberry = 3048820
     Monsters = 3062260
+    VHS = 3074340
 
 class CustomContextID(Enum):
     Steam = 6
@@ -190,7 +191,7 @@ class SharedClass:
         lowest_price = data.get('lowest_price', f"{self.prefix_currency}0.00 {self.suffix_currency}")
 
         # Регулярное выражение для извлечения числовой части и символов валюты
-        price_match = re.search(r"([^\d.,]*)(\d+[\.,]?\d*)\s*([^\d.,]*)", lowest_price)
+        price_match = re.search(r"([^\d.,]*)(\d{1,3}(?:[\s.,]\d{3})*(?:[\.,]\d*)?)\s*([^\d.,]*)", lowest_price)
 
         total_price = 0.00
         formatted_price = f"{self.prefix_currency}0.00 {self.suffix_currency}"
@@ -207,7 +208,7 @@ class SharedClass:
                 setting.suffix_currency = suffix_currency
 
             # Заменяем запятую на точку для преобразования в число
-            price_str = price_str.replace(',', '.')
+            price_str = price_str.replace(',', '.').replace(' ', '')
 
             # Преобразуем строку в число типа float
             price = float(price_str)

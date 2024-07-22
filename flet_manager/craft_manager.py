@@ -91,7 +91,7 @@ class CraftManagerWidget(ft.Column):
         self.widget_title_2 = ft.Text('Получаются в крафте', size=18)
         self.widget_title_3 = ft.Text('Профит крафта', size=18)
         self.widget_title_4 = ft.Text('Управление', size=18)
-        main_title = ft.Row(alignment=ft.MainAxisAlignment.CENTER, run_spacing=0,
+        self.table_title_widget = ft.Row(alignment=ft.MainAxisAlignment.CENTER, run_spacing=0,
                             controls=[
                                 ft.Row(expand=True, alignment=ft.MainAxisAlignment.CENTER, controls=[self.widget_title_1]),
                                 ft.Row(expand=True, alignment=ft.MainAxisAlignment.CENTER, controls=[self.widget_title_2]),
@@ -124,7 +124,7 @@ class CraftManagerWidget(ft.Column):
         self.controls = [
             body_title_widget_row,
             ft.Divider(),
-            main_title,
+            self.table_title_widget,
             ft.Divider(),
             self.body_widget_column,
             ft.Divider(),
@@ -135,9 +135,7 @@ class CraftManagerWidget(ft.Column):
         self.is_run = True
         threading.Thread(target=self.__update).start()
         self.safe_update(self)
-        self.__load_crafts()
-        if not self.__craft_widgets:
-            self.update_craft_list()
+        self.update_clear()
     def will_unmount(self):
         self.is_run = False
     def safe_update(self, widget):
@@ -149,61 +147,80 @@ class CraftManagerWidget(ft.Column):
             logger.exception('Exception while updating widget')
     def update_clear(self):
         self.__app_id = 3017120
-        self.title_widget_text.value = f'Система крафтов {common.get_current_appid_name(self.__app_id)}'
-        self.safe_update(self.title_widget_text)
-        if self.__app_id != common.app_id:
-            self.dont_has_access_widget.visible = True
-            self.safe_update(self.dont_has_access_widget)
-            self.is_not_loaded_widget.visible = False
-            self.safe_update(self.is_not_loaded_widget)
-            self.table_widget.visible = False
-            self.safe_update(self.table_widget)
-            return
-        self.dont_has_access_widget.visible = False
-        self.safe_update(self.dont_has_access_widget)
-        self.is_not_loaded_widget.visible = False
-        self.safe_update(self.is_not_loaded_widget)
-        self.table_widget.visible = True
-        self.safe_update(self.table_widget)
+        if self.__app_id == common.app_id:
+            self.__load_crafts()
+            if not self.__craft_widgets:
+                self.update_craft_list()
+            self.update_items_widget_button.disabled = False
+            self.safe_update(self.update_items_widget_button)
+        else:
+            self.update_items_widget_button.disabled = True
+            self.safe_update(self.update_items_widget_button)
 
+    def __update_widgets(self):
+        text_title = 'CraftManager: '
+        if self.__app_id != common.app_id:
+            text_title += 'На данный момент работает только с игрой Egg Surprise'
+
+            if not self.dont_has_access_widget.visible:
+                self.dont_has_access_widget.visible = True
+                self.safe_update(self.dont_has_access_widget)
+            if self.is_not_loaded_widget.visible:
+                self.is_not_loaded_widget.visible = False
+                self.safe_update(self.is_not_loaded_widget)
+            if self.table_widget.visible:
+                self.table_widget.visible = False
+                self.safe_update(self.table_widget)
+            if not self.create_widget_button.disabled:
+                self.create_widget_button.disabled = True
+                self.safe_update(self.create_widget_button)
+            if self.table_title_widget.visible:
+                self.table_title_widget.visible = False
+                self.safe_update(self.table_title_widget)
+        else:
+            if self.dont_has_access_widget.visible:
+                self.dont_has_access_widget.visible = False
+                self.safe_update(self.dont_has_access_widget)
+
+            if not self.__items:
+                text_title += 'Предметы не загружены'
+                if not self.is_not_loaded_widget.visible:
+                    self.is_not_loaded_widget.visible = True
+                    self.safe_update(self.is_not_loaded_widget)
+                if self.table_widget.visible:
+                    self.table_widget.visible = False
+                    self.safe_update(self.table_widget)
+                if not self.create_widget_button.disabled:
+                    self.create_widget_button.disabled = True
+                    self.safe_update(self.create_widget_button)
+                if self.table_title_widget.visible:
+                    self.table_title_widget.visible = False
+                    self.safe_update(self.table_title_widget)
+            else:
+                if self.is_not_loaded_widget.visible:
+                    self.is_not_loaded_widget.visible = False
+                    self.safe_update(self.is_not_loaded_widget)
+                if not self.table_widget.visible:
+                    self.table_widget.visible = True
+                    self.safe_update(self.table_widget)
+                if self.create_widget_button.disabled:
+                    self.create_widget_button.disabled = False
+                    self.safe_update(self.create_widget_button)
+                if not self.table_title_widget.visible:
+                    self.table_title_widget.visible = True
+                    self.safe_update(self.table_title_widget)
+
+        if self.page.title != text_title:
+            self.page.title = text_title
+            self.safe_update(self.page)
     def __update(self):
         while self.is_run:
             try:
-                if self.__app_id != common.app_id:
-                    continue
-                text_title = 'CraftManager: '
-                if not self.__items:
-                    text_title += 'Предметы не загружены'
-                    if not self.is_not_loaded_widget.visible:
-                        self.is_not_loaded_widget.visible = True
-                        self.safe_update(self.is_not_loaded_widget)
-                        self.table_widget.visible = False
-                        self.safe_update(self.table_widget)
-                        self.dont_has_access_widget.visible = False
-                        self.safe_update(self.dont_has_access_widget)
-                    if not self.create_widget_button.disabled:
-                        self.create_widget_button.disabled = True
-                        self.safe_update(self.create_widget_button)
-                else:
-                    if self.is_not_loaded_widget.visible:
-                        self.is_not_loaded_widget.visible = False
-                        self.safe_update(self.is_not_loaded_widget)
-                        self.table_widget.visible = True
-                        self.safe_update(self.table_widget)
-                        self.dont_has_access_widget.visible = False
-                        self.safe_update(self.dont_has_access_widget)
-                    if self.create_widget_button.disabled:
-                        self.create_widget_button.disabled = False
-                        self.safe_update(self.create_widget_button)
-
-                if self.page.title != text_title:
-                    self.page.title = text_title
-                    self.safe_update(self.page)
+                self.__update_widgets()
             except:
-                logger.exception('ERROR UPDATE InventoryStack')
+                logger.exception('ERROR UPDATE CraftManagerWidget')
             finally:
                 time.sleep(1)
-
 
     def create_craft(self, *args, craft_index: str = None):
         if not craft_index:
@@ -214,22 +231,22 @@ class CraftManagerWidget(ft.Column):
         if craft_index not in self.__craft_widgets:
             self.__craft_widgets[craft_index] = {}
 
-        items_input_widget = ft.Column(controls=[], expand=True, spacing=5)
+        items_input_widget = ft.Column(controls=[], expand=True, spacing=3)
         button_add_input_items = ft.FilledButton("Добавить предмет", expand=True, height=25)
         button_add_input_items.on_click = lambda e, _craft_index=craft_index: self.__add_new_item(_craft_index, True)
-        __item_input_column_widgets = ft.Column(expand=True, spacing=5,
+        __item_input_column_widgets = ft.Column(expand=True, spacing=3,
                                                 controls=[ft.Row(controls=[button_add_input_items]), ft.Row(controls=[items_input_widget])])
 
-        items_output_widget = ft.Column(controls=[], expand=True, spacing=5)
+        items_output_widget = ft.Column(controls=[], expand=True, spacing=3)
         button_add_output_items = ft.FilledButton("Добавить предмет", expand=True, height=25)
         button_add_output_items.on_click = lambda e, _craft_index=craft_index: self.__add_new_item(_craft_index, False)
-        __item_output_column_widgets = ft.Column(expand=True, spacing=5,
+        __item_output_column_widgets = ft.Column(expand=True, spacing=3,
                                                  controls=[ft.Row(controls=[button_add_output_items]), ft.Row(controls=[items_output_widget])])
 
         __item_total_title_widget = ft.Text('Профит крафта', text_align=ft.TextAlign.CENTER, expand=True)
         __profit_column = ft.Column(controls=[], expand=True, spacing=0)
         __item_total_widget = ft.Column(expand=True, alignment=ft.MainAxisAlignment.CENTER, spacing=0,
-                                        controls=[ft.Row(controls=[__item_total_title_widget]), ft.Row(controls=[__profit_column]), ])
+                                        controls=[ft.Row(controls=[__profit_column]), ]) #ft.Row(controls=[__item_total_title_widget]),
 
         button_del_craft = ft.FilledButton("Удалить крафт", expand=True, height=25)
 
@@ -285,11 +302,11 @@ class CraftManagerWidget(ft.Column):
                 total_price = sell_price * count
 
                 if is_input_item == 'input_item':
-                    max_theoretical_costs += total_price
+                    max_theoretical_costs += total_price if percent < 100 else 0
                     expected_costs += total_price * (100 - percent) / 100 if percent < 100 else 0
                 elif is_input_item == 'output_item':
-                    max_theoretical_profit += total_price
-                    expected_profit += total_price * percent / 100
+                    max_theoretical_profit += total_price if percent > 0 else 0
+                    expected_profit += total_price * percent / 100 if percent > 0 else 0
 
         net_expected_income = expected_profit - expected_costs
 
@@ -458,14 +475,7 @@ class CraftManagerWidget(ft.Column):
         setting.craft_system = craft_system
 
     def __load_items(self, *args):
-        if self.__app_id != common.app_id:
-            self.dont_has_access_widget.visible = True
-            self.safe_update(self.dont_has_access_widget)
-            self.is_not_loaded_widget.visible = False
-            self.safe_update(self.is_not_loaded_widget)
-            self.table_widget.visible = False
-            self.safe_update(self.table_widget)
-            return
+        if self.__app_id != common.app_id: return
 
         self.update_items_widget_button.disabled = True
         self.update_items_widget_button.text = 'Ожидайте я обновляю предметы и цены'
