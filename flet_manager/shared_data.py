@@ -96,11 +96,11 @@ class SharedClass:
         self.items_nameid: dict = setting.items_nameid.copy()
         self.load_prices_inventory()
 
-        self.inventory_interval_update = 30
+        self.inventory_interval_update = 10
 
         self.__event_update_appid = []
 
-        self.update_market_interval = 30
+        self.update_market_interval = 10
         self.next_updated_market_list = datetime.datetime.min
         self.market_list = []
 
@@ -239,7 +239,6 @@ class SharedClass:
         self.next_updated_inventory = datetime_now + datetime.timedelta(seconds=30)
         if not inventory: return
         self.inventory = inventory
-        self.next_updated_inventory = datetime_now + datetime.timedelta(seconds=self.inventory_interval_update)
         now_inventory = inventory.get_count_items()
         sqlite_manager.save_history(datetime_now, now_inventory, app_id=self.app_id)
         return self.inventory
@@ -302,9 +301,9 @@ class SharedClass:
         datetime_now = datetime.datetime.now()
         if self.next_updated_market_list > datetime_now: return
         market_list = self.session.get_game_market_list(appid=self.app_id)
+        self.next_updated_market_list = datetime_now + datetime.timedelta(seconds=self.update_market_interval)
         if not market_list: return
         self.market_list = market_list
-        self.next_updated_market_list = datetime_now + datetime.timedelta(seconds=self.update_market_interval)
         sqlite_manager.save_market_history(datetime_now, market_list, app_id=self.app_id)
         return self.market_list
 

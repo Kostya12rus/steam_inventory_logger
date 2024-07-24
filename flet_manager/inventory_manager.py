@@ -450,16 +450,16 @@ class ItemData:
         self.market_info = market
         self.update_widget_item()
     def update_history(self, item_history_hour: InventoryHistoryItem, item_history_day: InventoryHistoryItem):
-        if item_history_hour:
+        if isinstance(item_history_hour, InventoryHistoryItem):
             self.item_history_hour = item_history_hour
-        if item_history_day:
+        if isinstance(item_history_day, InventoryHistoryItem):
             self.item_history_day = item_history_day
         self.update_widget_item()
 
     def clear_widget(self, is_update: bool = False):
         self.item_list = []
-        self.item_history_hour = 0
-        self.item_history_day = 0
+        self.item_history_hour = InventoryHistoryItem({})
+        self.item_history_day = InventoryHistoryItem({})
 
     def __sell_item(self, *args):
         if not self.item_list or not self.__page: return
@@ -672,7 +672,7 @@ class InventoryItemListTable(ft.Column):
         return ft.Row(controls=[item_row, now_item_row, hour_item_row, day_item_row, sell_item_row])
 
     def __update_inventory(self, inventory: InventoryManager):
-        if not inventory: return
+        if not inventory or not inventory.inventory: return
         all_history = InventoryAllHistory()
         hour_history = all_history.get_history_hours_ago(hours_ago=1)
         day_history = all_history.get_history_hours_ago(hours_ago=24)
@@ -871,12 +871,12 @@ class InventoryWidget(ft.Column):
                 if setting.auto_update_inventory:
                     datetime_now = datetime.datetime.now()
                     if self.__next_update_inventory <= datetime_now:
-                        threading.Thread(target=lambda _=None: self.table_widget.update_inventory_items(button=self.update_widget_button)).start()
-                        # self.table_widget.update_inventory_items(button=self.update_widget_button)
+                        # threading.Thread(target=lambda _=None: self.table_widget.update_inventory_items(button=self.update_widget_button)).start()
+                        self.table_widget.update_inventory_items(button=self.update_widget_button)
                         self.__next_update_inventory = datetime_now + datetime.timedelta(minutes=2)
                     if self.__next_update_market <= datetime_now:
-                        threading.Thread(target=lambda _=None: self.table_widget.update_market_items(button=self.update_price_widget_button)).start()
-                        # self.table_widget.update_market_items(button=self.update_price_widget_button)
+                        # threading.Thread(target=lambda _=None: self.table_widget.update_market_items(button=self.update_price_widget_button)).start()
+                        self.table_widget.update_market_items(button=self.update_price_widget_button)
                         self.__next_update_market = datetime_now + datetime.timedelta(minutes=2)
 
                 title = (f'Inventory Manager -> {self.table_widget.count_now_text.value} [{self.table_widget.price_now_text.value}] | '
