@@ -1,5 +1,6 @@
 *.pyc
 *.db
 *.log
+*_old.py
 /output
 /.idea

@@ -43,5 +43,7 @@ class Setting:
     items_nameid = make_property('items_nameid', dict, {})
     craft_system = make_property('craft_system', dict, {})
 
+    auto_update_inventory = make_property('auto_update_inventory', bool, False)
+
 
 setting = Setting()

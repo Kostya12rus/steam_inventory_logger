@@ -23,10 +23,22 @@ class BodyManager(ft.Column):
         self.body_widget = ft.Column(expand=True)
         self.setting_widget = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
 
-        self.button_inventory = ft.FilledButton('Inventory', expand=True, on_click=lambda e: self.set_body_widget(self.inventory_page))
-        self.button_market = ft.FilledButton('Market', expand=True, on_click=lambda e: self.set_body_widget(self.market_page))
-        self.button_inventory_stack = ft.FilledButton('InventoryStack', expand=True, on_click=lambda e: self.set_body_widget(self.inventory_stack_page))
-        self.button_craft_manager = ft.FilledButton('CraftManager', expand=True, on_click=lambda e: self.set_body_widget(self.craft_manager_page))
+        self.button_inventory = ft.FilledButton(
+            'Inventory', expand=True, on_click=lambda e: self.set_body_widget(self.inventory_page),
+            height=30, style=ft.ButtonStyle(padding=ft.padding.all(0))
+        )
+        self.button_market = ft.FilledButton(
+            'Market', expand=True, on_click=lambda e: self.set_body_widget(self.market_page),
+            height=30, style=ft.ButtonStyle(padding=ft.padding.all(0))
+        )
+        self.button_inventory_stack = ft.FilledButton(
+            'InventoryStack', expand=True, on_click=lambda e: self.set_body_widget(self.inventory_stack_page),
+            height=30, style=ft.ButtonStyle(padding=ft.padding.all(0))
+        )
+        self.button_craft_manager = ft.FilledButton(
+            'CraftManager', expand=True, on_click=lambda e: self.set_body_widget(self.craft_manager_page),
+            height=30, style=ft.ButtonStyle(padding=ft.padding.all(0))
+        )
 
         self.drop_down_game = ft.Dropdown(
             on_change=self.__on_change_game,
@@ -51,14 +63,7 @@ class BodyManager(ft.Column):
 
     def __on_change_game(self, *args):
         common.set_appid(self.drop_down_game.value)
-        if self.inventory_page.is_run:
-            self.inventory_page.items_history_column.controls.clear()
-            self.inventory_page.items_price_column.controls.clear()
-            self.inventory_page.update()
-            common.next_updated_inventory = datetime.datetime.min
-            self.inventory_page.update_history()
-            self.inventory_page.update_datagram()
-            self.inventory_page.update()
+        self.inventory_page.update_clear()
         self.market_page.update_clear()
         self.inventory_stack_page.update_clear()
         self.craft_manager_page.update_clear()

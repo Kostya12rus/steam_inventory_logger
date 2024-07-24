@@ -2,6 +2,7 @@ import datetime
 import re
 import time
 from enum import Enum
+import flet as ft
 
 from sql_manager import sqlite_manager
 from sql_manager.config import setting
@@ -95,11 +96,11 @@ class SharedClass:
         self.items_nameid: dict = setting.items_nameid.copy()
         self.load_prices_inventory()
 
-        self.inventory_interval_update = 2
+        self.inventory_interval_update = 30
 
         self.__event_update_appid = []
 
-        self.update_market_interval = 1
+        self.update_market_interval = 30
         self.next_updated_market_list = datetime.datetime.min
         self.market_list = []
 
@@ -238,10 +239,10 @@ class SharedClass:
         self.next_updated_inventory = datetime_now + datetime.timedelta(seconds=30)
         if not inventory: return
         self.inventory = inventory
-        self.next_updated_inventory = datetime_now + datetime.timedelta(minutes=self.inventory_interval_update)
+        self.next_updated_inventory = datetime_now + datetime.timedelta(seconds=self.inventory_interval_update)
         now_inventory = inventory.get_count_items()
         sqlite_manager.save_history(datetime_now, now_inventory, app_id=self.app_id)
-        return now_inventory
+        return self.inventory
 
     def update_items_price(self):
         datetime_now = datetime.datetime.now()
@@ -301,10 +302,9 @@ class SharedClass:
         datetime_now = datetime.datetime.now()
         if self.next_updated_market_list > datetime_now: return
         market_list = self.session.get_game_market_list(appid=self.app_id)
-        # print(market_list)
         if not market_list: return
         self.market_list = market_list
-        self.next_updated_market_list = datetime_now + datetime.timedelta(minutes=self.update_market_interval)
+        self.next_updated_market_list = datetime_now + datetime.timedelta(seconds=self.update_market_interval)
         sqlite_manager.save_market_history(datetime_now, market_list, app_id=self.app_id)
         return self.market_list
 
@@ -312,6 +312,282 @@ class SharedClass:
         _all_history: list[dict[str, datetime.datetime | dict | int | str]] = sqlite_manager.get_recent_market_history()
         return [data for data in _all_history if str(data.get('app_id')) == str(self.app_id)]
 
-
-
 common = SharedClass()
+
+
+class InventoryItemDescription:
+    def __init__(self, description_dict: dict = None):
+        if not description_dict: description_dict = {}
+        self.type = description_dict.get('type', '')
+        self.value = description_dict.get('value', '')
+class InventoryItemTag:
+    def __init__(self, tag_dict: dict = None):
+        if not tag_dict: tag_dict = {}
+        self.category = tag_dict.get('category', '')
+        self.internal_name = tag_dict.get('internal_name', '')
+        self.category_name = tag_dict.get('category_name', '')
+        self.name = tag_dict.get('name', '')
+class InventoryItemRgDescriptions:
+    def __init__(self, rg_dict: dict = None):
+        if not rg_dict: rg_dict = {}
+        self.appid = rg_dict.get('appid', '')
+        self.classid = rg_dict.get('classid', '')
+        self.instanceid = rg_dict.get('instanceid', '')
+        self.icon_url = rg_dict.get('icon_url', '')
+        self.icon_url_large = rg_dict.get('icon_url_large', '')
+        self.icon_drag_url = rg_dict.get('icon_drag_url', '')
+        self.name = rg_dict.get('name', '')
+        self.market_hash_name = rg_dict.get('market_hash_name', '')
+        self.market_name = rg_dict.get('market_name', '')
+        self.name_color = rg_dict.get('name_color', '')
+        self.background_color = rg_dict.get('background_color', '')
+        self.type = rg_dict.get('type', '')
+        self.tradable = rg_dict.get('tradable', 0)
+        self.marketable = rg_dict.get('marketable', 0)
+        self.commodity = rg_dict.get('commodity', 0)
+        self.market_tradable_restriction = rg_dict.get('market_tradable_restriction', '')
+        self.market_marketable_restriction = rg_dict.get('market_marketable_restriction', '')
+        self.cache_expiration = rg_dict.get('cache_expiration', '')
+        self.descriptions = [InventoryItemDescription(d) for d in rg_dict.get('descriptions', [])]
+        self.owner_descriptions = [InventoryItemDescription(d) for d in rg_dict.get('owner_descriptions', [])]
+        self.tags = [InventoryItemTag(t) for t in rg_dict.get('tags', [])]
+class InventoryItem:
+    def __init__(self, item_dict: dict = None):
+        if not item_dict: item_dict = {}
+        self.id = item_dict.get('id', '')
+        self.classid = item_dict.get('classid', '')
+        self.instanceid = item_dict.get('instanceid', '')
+        self.amount = item_dict.get('amount', '0')
+        self.hide_in_china = item_dict.get('hide_in_china', 0)
+        self.pos = item_dict.get('pos', 0)
+        self.rg_descriptions = InventoryItemRgDescriptions(item_dict.get('rgDescriptions', {}))
+
+    def __extract_date_from_owner_descriptions(self):
+        if not self.rg_descriptions.owner_descriptions: return None
+        date_pattern = re.compile(r'\[date\](\d+)\[/date\]')
+        for desc in self.rg_descriptions.owner_descriptions:
+            match = date_pattern.search(desc.value)
+            if match:
+                timestamp = int(match.group(1))
+                return datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+        return None
+    def name(self):
+        return self.rg_descriptions.name
+    def market_hash_name(self):
+        return self.rg_descriptions.market_hash_name
+    def color(self):
+        return f'#{self.rg_descriptions.name_color}' if self.rg_descriptions.name_color else ''
+    def get_amount(self):
+        amount = int(self.amount)
+        return amount if amount > 0 else 0
+    def market_url(self) -> str:
+        if not self.rg_descriptions.market_hash_name: return
+        return f'https://steamcommunity.com/market/listings/{self.rg_descriptions.appid}/{self.rg_descriptions.market_hash_name}'
+    def icon_url(self) -> str:
+        if not self.rg_descriptions.icon_url: return None
+        return f'https://community.akamai.steamstatic.com/economy/image/{self.rg_descriptions.icon_url}/330x192?allow_animated=1'
+    def end_ban_marketable(self):
+        return self.__extract_date_from_owner_descriptions()
+    def is_tradable(self):
+        return bool(self.rg_descriptions.tradable)
+    def is_marketable(self):
+        return bool(self.rg_descriptions.marketable)
+
+    def __repr__(self):
+        return f'<{self.id}, classid: {self.classid}, instanceid: {self.instanceid}, name: {self.name()}, market_hash_name: {self.market_hash_name()}>'
+    def __str__(self):
+        return f'<{self.id}, classid: {self.classid}, instanceid: {self.instanceid}, name: {self.name()}, market_hash_name: {self.market_hash_name()}>'
+
+class InventoryHistoryItem:
+    def __init__(self, item_dict: dict = None, app_id: int = 0):
+        if not item_dict: item_dict = {}
+        self.app_id = app_id
+        self.count = item_dict.get('count', 0)
+        self.icon_url = item_dict.get('icon_url', None)
+        self.name = item_dict.get('name', None)
+        self.market_hash_name = item_dict.get('market_hash_name', None)
+        self.name_color = item_dict.get('name_color', None)
+    def get_color(self):
+        if not self.name_color: return
+        return f'#{self.name_color}' if self.name_color else None
+    def market_url(self) -> str:
+        if not self.market_hash_name: return
+        return f'https://steamcommunity.com/market/listings/{self.app_id}/{self.market_hash_name}'
+    def get_icon_url(self) -> str:
+        if not self.icon_url: return None
+        return f'https://community.akamai.steamstatic.com/economy/image/{self.icon_url}/330x192?allow_animated=1'
+class InventoryHistory:
+    def __init__(self, history_dict: dict = None):
+        if not history_dict: history_dict = {}
+        self.time_update = history_dict.get('time_update', datetime.datetime.min)
+        self.app_id = history_dict.get('app_id', 0)
+        self.items = [InventoryHistoryItem(i, self.app_id) for i in history_dict.get('items', [])]
+    def get_list_market_hash_name(self, app_id: int | str = None) -> set:
+        if not app_id: app_id = common.app_id
+        if str(self.app_id) != str(app_id): return set()
+        return {item.market_hash_name for item in self.items if item.market_hash_name}
+    def get_item_from_market_hash_name(self, market_hash_name: str, app_id: int | str = None):
+        if not app_id: app_id = common.app_id
+        if str(self.app_id) != str(app_id): return InventoryHistoryItem({}, self.app_id)
+        return next((i for i in self.items if i.market_hash_name == market_hash_name), InventoryHistoryItem({}, self.app_id))
+    def get_item_count_from_market_hash_name(self, market_hash_name: str, app_id: int | str = None):
+        if not app_id: app_id = common.app_id
+        if str(self.app_id) != str(app_id): return 0
+        return next((i.count for i in self.items if i.market_hash_name == market_hash_name), 0)
+class InventoryAllHistory:
+    def __init__(self):
+        _all_history = common.get_history_inventory()
+        self.list_history = [InventoryHistory(entry) for entry in _all_history]
+    def get_latest_history(self):
+        if not self.list_history: return InventoryHistory({})
+        return max(self.list_history, key=lambda entry: entry.time_update)
+    def get_previous_history(self):
+        latest_history = self.get_latest_history()
+        if not latest_history or not self.list_history: return InventoryHistory({})
+        previous_histories = [entry for entry in self.list_history if entry.time_update != latest_history.time_update]
+        if not previous_histories: return InventoryHistory({})
+        return max(previous_histories, key=lambda entry: entry.time_update)
+    def get_history_hours_ago(self, hours_ago: int = 1):
+        time_threshold = datetime.datetime.now() - datetime.timedelta(hours=hours_ago)
+        recent_history_entries = [entry for entry in self.list_history if entry.time_update >= time_threshold]
+        if not recent_history_entries: return InventoryHistory({})
+        return min(recent_history_entries, key=lambda entry: entry.time_update)
+
+
+class MarketItemDelta:
+    def __init__(self, now_item: 'MarketItem', old_item: 'MarketItem'):
+        self.now_item = now_item
+        self.old_item = old_item
+
+        self.sell_listings = self.now_item.sell_listings - self.old_item.sell_listings
+        self.sell_price = self.now_item.sell_price - self.old_item.sell_price
+        self.sell_price_text = self.__generate_sell_price_text()
+
+        self.sell_price_percent = self.__generate_sell_price_percent()
+        self.sell_listings_percent = self.__generate_sell_listings_percent()
+
+    def replace_number_in_currency(self, new_number):
+        original_str = self.now_item.sell_price_text if self.now_item.sell_price_text else self.old_item.sell_price_text
+        if not original_str: return str(new_number)
+        return re.sub(r'\d{1,3}(?:\s?\d{3})*(?:[,.]\d+)?', new_number, str(original_str))
+    def generate_number_in_currency(self, new_number):
+        return self.replace_number_in_currency(f"{round(new_number / 100, 2):.2f}")
+    def __generate_sell_price_text(self):
+        return self.replace_number_in_currency(f"{round((self.now_item.sell_price - self.old_item.sell_price) / 100, 2):.2f}")
+    def __generate_sell_price_percent(self):
+        _percent_change = abs((self.now_item.sell_price / self.old_item.sell_price) - 1 if self.old_item.sell_price != 0 else 0)
+        return round(_percent_change * 100, 2)
+    def __generate_sell_listings_percent(self):
+        _percent_change = abs((self.now_item.sell_listings / self.old_item.sell_listings) - 1 if self.old_item.sell_listings != 0 else 0)
+        return round(_percent_change * 100, 2)
+    def color_sell_price_text(self):
+        return ft.colors.GREEN if self.sell_price >= 0 else ft.colors.RED
+    def color_sell_listings(self):
+        return ft.colors.GREEN if self.sell_listings >= 0 else ft.colors.RED
+    def is_draw_sell_price_text(self):
+        return self.sell_price != 0
+    def is_draw_sell_listings(self):
+        return self.sell_listings != 0
+    def get_tooltip(self, datetime_now: datetime.datetime, datetime_old: datetime.datetime):
+        return (f"{datetime_old.strftime('%d.%m.%Y %H:%M')} -> {datetime_now.strftime('%d.%m.%Y %H:%M')}\n"
+                f"Цена: {self.old_item.sell_price_text} -> {self.now_item.sell_price_text} ({self.__generate_sell_price_text()}) [{self.__generate_sell_price_percent():.2f}%]\n"
+                f"Кол-во: {self.old_item.sell_listings}шт. -> {self.now_item.sell_listings}шт. ({self.sell_listings}шт.) [{self.__generate_sell_listings_percent():.2f}%]")
+class MarketDescription:
+    def __init__(self, description_dict: dict):
+        self.type = description_dict.get('type')
+        self.value = description_dict.get('value')
+class MarketAssetDescription:
+    def __init__(self, asset_description_dict: dict):
+        self.appid = asset_description_dict.get('appid')
+        self.classid = asset_description_dict.get('classid')
+        self.instanceid = asset_description_dict.get('instanceid')
+        self.name = asset_description_dict.get('name')
+        self.name_color = asset_description_dict.get('name_color', '')
+        self.market_name = asset_description_dict.get('market_name')
+        self.market_hash_name = asset_description_dict.get('market_hash_name')
+
+        self.tradable = bool(asset_description_dict.get('tradable', False))
+        self.marketable = bool(asset_description_dict.get('marketable', False))
+        self.commodity = bool(asset_description_dict.get('commodity', False))
+
+        self.market_tradable_restriction = asset_description_dict.get('market_tradable_restriction', -1)
+        self.market_marketable_restriction = asset_description_dict.get('market_marketable_restriction', -1)
+
+        self.icon_url = asset_description_dict.get('icon_url')
+        self.icon_url_large = asset_description_dict.get('icon_url_large')
+
+        self.currency = asset_description_dict.get('currency')
+        self.descriptions = [MarketDescription(d) for d in asset_description_dict.get('descriptions', [])]
+        self.type = asset_description_dict.get('type', "")
+        self.background_color = asset_description_dict.get('background_color', "")
+class MarketItem:
+    def __init__(self, item_dict: dict = None):
+        if not item_dict: item_dict = {}
+        self.name = item_dict.get('name', ' ')
+        self.hash_name = item_dict.get('hash_name', '')
+
+        self.sell_listings = item_dict.get('sell_listings', 0)
+        self.sell_price = item_dict.get('sell_price', 0)
+        self.sell_price_text = item_dict.get('sell_price_text', '')
+        self.sale_price_text = item_dict.get('sale_price_text', '')
+
+        self.asset_description = MarketAssetDescription(item_dict.get('asset_description', {}))
+
+        self.app_name = item_dict.get('app_name')
+        self.app_icon = item_dict.get('app_icon')
+    def __repr__(self):
+        return f'<{self.__class__.__name__}> name: {self.name}, price: {self.sell_price_text}, listings: {self.sell_price}'
+
+    def is_bug_item(self) -> bool:
+        return self.hash_name != self.asset_description.market_hash_name
+    def is_empty(self) -> bool:
+        return self.hash_name == ''
+    def icon_url(self) -> str:
+        if not self.asset_description.icon_url: return
+        return f'https://community.akamai.steamstatic.com/economy/image/{self.asset_description.icon_url}/330x192?allow_animated=1'
+    def market_url(self) -> str:
+        if not self.asset_description.appid or not self.asset_description.market_hash_name: return
+        return f'https://steamcommunity.com/market/listings/{self.asset_description.appid}/{self.asset_description.market_hash_name}'
+    def market_hash_name(self) -> str:
+        return self.asset_description.market_hash_name
+    def get_delta(self, old_item: 'MarketItem') -> 'MarketItemDelta':
+        return MarketItemDelta(self, old_item)
+    def color(self) -> str:
+        return f'#{self.asset_description.name_color}' if self.asset_description.name_color else ''
+    def is_current_game(self, app_id: int) -> bool:
+        return str(self.asset_description.appid) == str(app_id)
+    def replace_number_in_currency(self, new_number):
+        return re.sub(r'\d{1,3}(?:\s?\d{3})*(?:[,.]\d+)?', new_number, self.sell_price_text)
+    def generate_number_in_currency(self, new_number):
+        return self.replace_number_in_currency(f"{round(new_number / 100, 2):.2f}")
+    def multiply_price_in_currency(self, count: int):
+        return self.generate_number_in_currency(self.sell_price * count)
+
+
+class MarketHistory:
+    def __init__(self, history_dict: dict):
+        self.time_update = history_dict.get('time_update', datetime.datetime.min)
+        self.items = [MarketItem(i) for i in history_dict.get('items', [])]
+
+    def get_list_market_hash_name(self) -> set:
+        return {item.market_hash_name() for item in self.items if not item.is_bug_item() and item.is_current_game(common.app_id)}
+    def get_item_from_market_hash_name(self, market_hash_name: str) -> MarketItem:
+        return next((i for i in self.items if not i.is_bug_item() and i.market_hash_name() == market_hash_name and i.is_current_game(common.app_id)), MarketItem())
+class MarketAllHistory:
+    def __init__(self):
+        _all_history = common.get_history_market_list()
+        self.list_history = [MarketHistory(entry) for entry in _all_history]
+    def get_latest_history(self):
+        if not self.list_history: return MarketHistory({})
+        return max(self.list_history, key=lambda entry: entry.time_update)
+    def get_previous_history(self):
+        latest_history = self.get_latest_history()
+        if not latest_history or not self.list_history: return MarketHistory({})
+        previous_histories = [entry for entry in self.list_history if entry.time_update != latest_history.time_update]
+        if not previous_histories: return MarketHistory({})
+        return max(previous_histories, key=lambda entry: entry.time_update)
+    def get_history_hours_ago(self, hours_ago: int = 1):
+        time_threshold = datetime.datetime.now() - datetime.timedelta(hours=hours_ago)
+        recent_history_entries = [entry for entry in self.list_history if entry.time_update >= time_threshold]
+        if not recent_history_entries: return MarketHistory({})
+        return min(recent_history_entries, key=lambda entry: entry.time_update)

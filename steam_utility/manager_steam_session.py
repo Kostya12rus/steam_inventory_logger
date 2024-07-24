@@ -20,7 +20,7 @@ def token_parse(url):
 
 class InventoryManager:
     def __init__(self, items: dict, context_id=2):
-        self.__data = items
+        self.data_json = items
         self.rgDescriptions: dict = items.get('rgDescriptions', {})
         if not isinstance(self.rgDescriptions, dict):
             self.rgDescriptions: dict = {}

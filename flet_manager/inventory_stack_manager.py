@@ -284,11 +284,7 @@ class InventoryStackWidget(ft.Column):
             self.safe_update(self.start_all_stack_widget_button)
             inventory = common.session.get_inventory_items(appid=common.app_id, context_id=common.get_contextid_appid())
             if inventory:
-                new_inventory = []
-                for item in inventory.inventory:
-                    new_inventory.append(Item(item))
-
-                self.inventory = new_inventory
+                self.inventory = [Item(item) for item in inventory.inventory]
                 self.__items_button_stack = {}
                 self.__create_items_table()
         except:
