@@ -30,18 +30,19 @@ def create_text(value, size=14, expand=True, text_align=ft.TextAlign.CENTER):
 
 
 class DialogSell(ft.AlertDialog):
-    def __init__(self, item_data: list[InventoryItem] = None):
+    def __init__(self, item_data: list[InventoryItem] = None, callback_update: callable = None):
         super().__init__()
         self.isolated = True
         self.expand = True
         self.item_id = None
+        self.callback_update = callback_update
 
         self.last_updated = datetime.datetime.now()
         self.item_data: InventoryItem = next((item for item in item_data if item.market_hash_name()), None)
         self.market_hash_name = next((item.market_hash_name() for item in item_data if item.market_hash_name()), None)
         self.all_item_in_inventary = item_data
         self.itemordershistogram = {}
-        self.item_count = sum([item_data.get_amount() for item_data in item_data], start=0)
+        self.item_count = sum([item_data.get_amount() for item_data in item_data if item_data.is_marketable()], start=0)
 
         self.on_dismiss = self.__on_dismiss
         self.__updated_time = ft.Text(value=f' ')
@@ -96,12 +97,16 @@ class DialogSell(ft.AlertDialog):
         self.item_info_column.controls.append(ft.Row(controls=[self.log_column], expand=True))
 
     def start_sell(self, *args):
+        if not self.button_start_sell.disabled:
+            self.button_start_sell.disabled = True
+            self.button_price_sell.update()
         button_price_get = int(float(self.button_price_get.value if self.button_price_get.value else 0) * 100)
         if not button_price_get: return
         count_item_sell = int(self.count_item_sell.value if self.count_item_sell.value else 0)
         if not count_item_sell: return
         for item in self.all_item_in_inventary:
             if count_item_sell <= 0: break
+            if not item.is_marketable(): continue
             item_id = item.id
             amount = item.get_amount()
             if amount <= 0: continue
@@ -118,6 +123,11 @@ class DialogSell(ft.AlertDialog):
         self.set_count_sell(count=1)
         self.create_title()
         self.update()
+        if self.callback_update:
+            self.callback_update(is_update=True)
+        if self.item_count > 0 and self.button_start_sell.disabled:
+            self.button_start_sell.disabled = False
+            self.button_price_sell.update()
 
     def update_total(self, *args):
         button_price_sell = float(self.button_price_sell.value if self.button_price_sell.value else 0)
@@ -138,7 +148,7 @@ class DialogSell(ft.AlertDialog):
         if count:
             self.count_item_sell.value = int(count)
 
-        self.item_count = sum([item_data.get_amount() for item_data in self.all_item_in_inventary], start=0)
+        self.item_count = sum([item_data.get_amount() for item_data in self.all_item_in_inventary if item_data.is_marketable()], start=0)
         self.count_item_sell.suffix_text = f"из {self.item_count}"
 
         if int(self.count_item_sell.value) > self.item_count:
@@ -147,6 +157,10 @@ class DialogSell(ft.AlertDialog):
             self.count_item_sell.value = '1'
         self.count_item_sell.update()
         self.update_total()
+
+        if not self.button_start_sell.disabled and self.item_count <= 0:
+            self.button_start_sell.disabled = True
+            self.button_price_sell.update()
 
     def calculate_total(self, price_get: float = None, price_sell: float = None):
         min_commission = 0.02  # Минимальная комиссия
@@ -429,11 +443,11 @@ class ItemData:
         self.count_day = day_change
 
         is_any_marketable = any([i.is_marketable() for i in self.item_list])
-        if not is_any_marketable and not self.icon_sell.disabled:
+        if (not is_any_marketable or count_now <= 0) and not self.icon_sell.disabled:
             self.icon_sell.disabled = True
             self.icon_sell.tooltip = 'Нет доступных предметов для продажи'
             self.icon_sell.icon_color = ft.colors.RED
-        if is_any_marketable and self.icon_sell.disabled:
+        if is_any_marketable and count_now > 0 and self.icon_sell.disabled:
             self.icon_sell.disabled = False
             self.icon_sell.tooltip = ''
             self.icon_sell.icon_color = ft.colors.GREEN
@@ -463,7 +477,7 @@ class ItemData:
 
     def __sell_item(self, *args):
         if not self.item_list or not self.__page: return
-        dialog = DialogSell(self.item_list)
+        dialog = DialogSell(self.item_list, self.update_widget_item)
         self.__page.dialog = dialog
         dialog.open = True
         self.safe_update(self.__page)
@@ -761,7 +775,7 @@ class InventoryItemListTable(ft.Column):
         elif self.sort_type == 'price_hours':
             items_list.sort(key=lambda item: item.price_hours, reverse=self.sort_descending)
         elif self.sort_type == 'count_hours':
-            items_list.sort(key=lambda item: item.price_hours, reverse=self.sort_descending)
+            items_list.sort(key=lambda item: item.count_hours, reverse=self.sort_descending)
 
         elif self.sort_type == 'price_day':
             items_list.sort(key=lambda item: item.price_day, reverse=self.sort_descending)
