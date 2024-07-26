@@ -1,15 +1,27 @@
-import datetime
 import re
-import time
-from enum import Enum
-import flet as ft
+import io
+import os
+import json
+import shutil
+import pathlib
+import zipfile
+import requests
+import datetime
 
+import flet as ft
+from enum import Enum
+
+from dateutil.parser import parse
 from sql_manager import sqlite_manager
 from sql_manager.config import setting
-from steam_utility.manager_steam_session import InventoryManager, SteamWebSession
-from dateutil.parser import parse
 from logger_utility.logger_config import logger
+from steam_utility.manager_steam_session import InventoryManager, SteamWebSession
 
+
+class Games(Enum):
+    EggSurprise = 3017120
+    Banana = 2923300
+    Monsters = 3062260
 
 class Currency(Enum):
     USD = 1
@@ -54,17 +66,6 @@ class Currency(Enum):
     UYU = 41
     RMB = 9000
     NXP = 9001
-
-class Games(Enum):
-    EggSurprise = 3017120
-    Banana = 2923300
-    Cats = 2977660
-    Tapple = 3047030
-    Meh = 3065090
-    Duck = 3057940
-    Raspberry = 3048820
-    Monsters = 3062260
-    VHS = 3074340
 
 class CustomContextID(Enum):
     Steam = 6
@@ -561,6 +562,11 @@ class MarketItem:
         return self.replace_number_in_currency(f"{round(new_number / 100, 2):.2f}")
     def multiply_price_in_currency(self, count: int):
         return self.generate_number_in_currency(self.sell_price * count)
+    def calcutate_commision(self, price: int = None) -> str:
+        if not price: price = self.sell_price
+        commission = abs(price - (price / 115 * 100))
+        price_after_commission = price - commission
+        return self.generate_number_in_currency(price_after_commission)
 
 
 class MarketHistory:
@@ -590,3 +596,91 @@ class MarketAllHistory:
         recent_history_entries = [entry for entry in self.list_history if entry.time_update >= time_threshold]
         if not recent_history_entries: return MarketHistory({})
         return min(recent_history_entries, key=lambda entry: entry.time_update)
+
+
+class UpdateManager:
+    def __init__(self):
+        self.last_check_version = datetime.datetime.min
+        self.ignore_update = False
+
+        self.installed_version = setting.installed_version
+        self.accept_update = bool(setting.accept_update)
+
+        self.url_server = "https://raw.githubusercontent.com/Kostya12rus/steam_inventory_logger/main/version.json"
+        self.server_version = None
+        self.server_url_download = None
+        self.server_changes = None
+
+        self.file_version = None
+        self.file_url_download = None
+        self.file_changes = None
+
+    def change_accept_update(self, accept_update: bool):
+        if accept_update is None: return
+        setting.accept_update = accept_update
+        self.accept_update = accept_update
+    def change_installed_version(self, installed_version: float = None):
+        if installed_version is None: return
+        setting.installed_version = installed_version
+        self.installed_version = installed_version
+
+    def is_first_run(self):
+        if not self.accept_update: return False
+        return self.installed_version == 0
+    def is_installed_latest_version(self):
+        if not self.accept_update: return True
+        if not self.server_version: return True
+        return self.installed_version == self.server_version or self.file_version == self.server_version
+
+    def load_server_version(self):
+        response = requests.get(self.url_server, timeout=10)
+        if not response.ok: return
+        json_response: dict = response.json()
+        if not json_response: return
+        self.server_version = json_response.get('version', None)
+        self.server_url_download = json_response.get('url_download', None)
+        self.server_changes = json_response.get('changes', None)
+        return True
+    def load_file_version(self):
+        version_path = pathlib.Path('version.json')
+        if not version_path.is_file(): return
+        with open(version_path) as file:
+            json_file: dict = json.load(file)
+        if not json_file: return
+        self.file_version = json_file.get('version', None)
+        self.file_url_download = json_file.get('url_download', None)
+        self.file_changes = json_file.get('changes', None)
+        return True
+
+    def download_and_extract_github_zip(self, extract_to='.'):
+        print(self.server_url_download)
+        if not self.server_url_download:
+            return False
+
+        response = requests.get(self.server_url_download, timeout=10)
+        print(response)
+        print(response.ok)
+        if not response.ok:
+            return False
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
+            temp_dir = os.path.join(extract_to, 'temp_extraction')
+            zip_ref.extractall(temp_dir)
+
+        project_folder = zip_ref.namelist()[0].split('/')[0]
+        print(f'{project_folder=}')
+        project_path = os.path.join(temp_dir, project_folder)
+        print(f'{project_path=}')
+
+        for item in os.listdir(project_path):
+            src = os.path.join(project_path, item)
+            dst = os.path.join(extract_to, item)
+            if os.path.exists(dst):
+                if os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                else:
+                    os.remove(dst)
+            shutil.move(src, extract_to)
+
+        shutil.rmtree(temp_dir)
+        return True

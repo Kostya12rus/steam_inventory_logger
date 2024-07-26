@@ -1,15 +1,14 @@
-import datetime
 import re
-import threading
 import time
-
-from flet_manager import common, MarketAllHistory, InventoryAllHistory
+import datetime
+import threading
 import flet as ft
 
-from flet_manager.shared_data import InventoryItem, MarketItem, InventoryHistoryItem
 from sql_manager.config import setting
 from logger_utility.logger_config import logger
+from flet_manager import common, InventoryAllHistory
 from steam_utility.manager_steam_session import InventoryManager
+from flet_manager.shared_data import InventoryItem, MarketItem, InventoryHistoryItem
 
 def create_row(*texts):
     return ft.Row(
@@ -413,15 +412,21 @@ class ItemData:
         self.name_text.value = name if name else self.name_text.value
         self.name_text.color = color if color else self.name_text.color
 
-        self.single_price_now_text.value = self.market_info.sell_price_text if self.market_info else ' '
+        self.single_price_now_text.value = self.market_info.multiply_price_in_currency(1) if self.market_info else ' '
+        single_price_now_text_tooltip = self.market_info.calcutate_commision() if self.market_info else ''
+        self.single_price_now_text.tooltip = f'С учетом комиссии: {single_price_now_text_tooltip}' if single_price_now_text_tooltip else ''
 
         count_now = sum(i.get_amount() for i in self.item_list)
         self.price_now_text.value = self.market_info.multiply_price_in_currency(count_now) if self.market_info else ' '
+        price_now_text_tooltip = self.market_info.calcutate_commision(self.market_info.sell_price*count_now) if self.market_info else ''
+        self.price_now_text.tooltip = f'С учетом комиссии: {price_now_text_tooltip}' if price_now_text_tooltip else ''
         self.count_now_text.value = f'{count_now}шт.'
 
         hour_change = count_now - self.item_history_hour.count
         hour_change_color = ft.colors.GREEN if hour_change > 0 else ft.colors.RED
         self.price_hours_text.value = self.market_info.multiply_price_in_currency(hour_change) if self.market_info and hour_change != 0 else ' '
+        price_hours_text_tooltip = self.market_info.calcutate_commision(hour_change) if self.market_info and hour_change != 0 else ''
+        self.price_hours_text.tooltip = f'С учетом комиссии: {price_hours_text_tooltip}' if price_hours_text_tooltip else ''
         self.price_hours_text.color = hour_change_color
         self.count_hours_text.value = f'{hour_change}шт.' if hour_change != 0 else ' '
         self.count_hours_text.color = hour_change_color
@@ -429,6 +434,8 @@ class ItemData:
         day_change = count_now - self.item_history_day.count
         day_change_color = ft.colors.GREEN if day_change > 0 else ft.colors.RED
         self.price_day_text.value = self.market_info.multiply_price_in_currency(day_change) if self.market_info and day_change != 0 else ' '
+        price_day_text_tooltip = self.market_info.calcutate_commision(day_change) if self.market_info and day_change != 0 else ''
+        self.price_day_text.tooltip = f'С учетом комиссии: {price_day_text_tooltip}' if price_day_text_tooltip else ''
         self.price_day_text.color = day_change_color
         self.count_day_text.value = f'{day_change}шт.' if day_change != 0 else ' '
         self.count_day_text.color = day_change_color
@@ -506,6 +513,7 @@ class InventoryItemListTable(ft.Column):
 
         self.controls.append(self.__create_title_row())
         self.controls.append(self.__account_info())
+        self.controls.append(ft.Divider(height=5))
 
         self.items_column = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.controls.append(ft.Row(controls=[self.items_column], expand=True))
@@ -575,14 +583,14 @@ class InventoryItemListTable(ft.Column):
         return ft.Row(controls=[item_row, now_item_row, hour_item_row, day_item_row, sell_item_row])
     def __create_title_row(self):
         # Создание строки "Название"
-        item_title_text = create_text('Название')
+        item_title_text = create_text('Название', expand=False, size=16)
         item_title_sort_textfield = ft.TextField(
             label='Name Filter',
-            dense=True,
-            content_padding=5,
+            content_padding=0,
             text_align=ft.TextAlign.LEFT,
             max_lines=1,
             expand=True,
+            height=30
         )
         item_title_sort_textfield.on_change = lambda e: self.__on_change_name_filter(item_title_sort_textfield.value)
         item_row = ft.Row(
@@ -693,7 +701,7 @@ class InventoryItemListTable(ft.Column):
 
         now_list_inventory = [InventoryItem(item) for item in inventory.inventory]
         now_list_market_hash_name = {item.market_hash_name() for item in now_list_inventory}
-        list_market_hash_name = (now_list_market_hash_name | hour_history.get_list_market_hash_name() | day_history.get_list_market_hash_name())
+        list_market_hash_name = now_list_market_hash_name | hour_history.get_list_market_hash_name() | day_history.get_list_market_hash_name()
 
         market_items = [MarketItem(item) for item in common.market_list]
 
@@ -732,7 +740,7 @@ class InventoryItemListTable(ft.Column):
         self.__update_inventory(now_inventory)
 
         time_now = datetime.datetime.now().strftime('%H:%M:%S')
-        button.text = f"{text} [Инвентарь обновлен {time_now}]" if now_inventory else f"{text} [Инвентарь не обновлен]"
+        button.text = f"{text} [Обновлен {time_now}]" if now_inventory else f"{text} [Не обновлен]"
         self.safe_update(button)
 
         time.sleep(5)
@@ -785,17 +793,25 @@ class InventoryItemListTable(ft.Column):
         ready_market_example: MarketItem = next((item.market_info for item in items_list if item.market_info and item.market_info.sell_price_text), None)
 
         sum_single_price_now = sum([item.single_price_now for item in items_list], start=0)
+        # self.single_price_now_text.value = ready_market_example.generate_number_in_currency(sum_single_price_now) if ready_market_example else ' '
+        self.single_price_now_text.value = ' '
+
         sum_price_now = sum([item.price_now for item in items_list], start=0)
-        self.single_price_now_text.value = ready_market_example.generate_number_in_currency(sum_single_price_now) if ready_market_example else ' '
         self.price_now_text.value = ready_market_example.generate_number_in_currency(sum_price_now) if ready_market_example else ' '
+        price_now_text_tooltip = ready_market_example.calcutate_commision(sum_price_now) if ready_market_example else ''
+        self.price_now_text.tooltip = f'С учетом комиссии: {price_now_text_tooltip}' if price_now_text_tooltip else ''
         self.count_now_text.value = f'{sum([item.count_now for item in items_list], start=0)}шт.'
 
         sum_price_hours = sum([item.price_hours for item in items_list], start=0)
         self.price_hours_text.value = ready_market_example.generate_number_in_currency(sum_price_hours) if ready_market_example else ' '
+        price_hours_text_tooltip = ready_market_example.calcutate_commision(sum_price_hours) if ready_market_example else ''
+        self.price_hours_text.tooltip = f'С учетом комиссии: {price_hours_text_tooltip}' if price_hours_text_tooltip else ''
         self.count_hours_text.value = f'{sum([item.count_hours for item in items_list], start=0)}шт.'
 
         sum_price_day = sum([item.price_day for item in items_list], start=0)
         self.price_day_text.value = ready_market_example.generate_number_in_currency(sum_price_day) if ready_market_example else ' '
+        price_day_text_tooltip = ready_market_example.calcutate_commision(sum_price_day) if ready_market_example else ''
+        self.price_day_text.tooltip = f'С учетом комиссии: {price_day_text_tooltip}' if price_day_text_tooltip else ''
         self.count_day_text.value = f'{sum([item.count_day for item in items_list], start=0)}шт.'
 
         self.items_column.controls = [item.item_main_row for item in items_list]
@@ -872,8 +888,6 @@ class InventoryWidget(ft.Column):
         if self.__last_app_id == common.app_id: return
         self.__last_app_id = common.app_id
         self.table_widget.update_clear()
-        # self.__next_update_inventory = datetime.datetime.min
-        # self.__next_update_market = datetime.datetime.min
         self.safe_update(self)
 
     @staticmethod
@@ -885,11 +899,9 @@ class InventoryWidget(ft.Column):
                 if setting.auto_update_inventory:
                     datetime_now = datetime.datetime.now()
                     if self.__next_update_inventory <= datetime_now:
-                        # threading.Thread(target=lambda _=None: self.table_widget.update_inventory_items(button=self.update_widget_button)).start()
                         self.table_widget.update_inventory_items(button=self.update_widget_button)
                         self.__next_update_inventory = datetime_now + datetime.timedelta(minutes=2)
                     if self.__next_update_market <= datetime_now:
-                        # threading.Thread(target=lambda _=None: self.table_widget.update_market_items(button=self.update_price_widget_button)).start()
                         self.table_widget.update_market_items(button=self.update_price_widget_button)
                         self.__next_update_market = datetime_now + datetime.timedelta(minutes=2)
 
@@ -902,5 +914,3 @@ class InventoryWidget(ft.Column):
             except:
                 pass
             time.sleep(1)
-
-

@@ -1,74 +1,13 @@
-import threading
 import time
+import threading
 import webbrowser
 
-from flet_manager import common
 import flet as ft
 
+from flet_manager import common
 from sql_manager.config import setting
+from flet_manager.shared_data import MarketItem
 from logger_utility.logger_config import logger
-
-class Description:
-    def __init__(self, description_dict: dict = None):
-        if not description_dict: description_dict = {}
-        self.type = description_dict.get('type')
-        self.value = description_dict.get('value')
-class AssetDescription:
-    def __init__(self, asset_description_dict: dict = None):
-        if not asset_description_dict: asset_description_dict = {}
-        self.appid = asset_description_dict.get('appid')
-        self.classid = asset_description_dict.get('classid')
-        self.instanceid = asset_description_dict.get('instanceid')
-        self.name = asset_description_dict.get('name')
-        self.name_color = asset_description_dict.get('name_color', '')
-        self.market_name = asset_description_dict.get('market_name')
-        self.market_hash_name = asset_description_dict.get('market_hash_name')
-
-        self.tradable = bool(asset_description_dict.get('tradable', False))
-        self.marketable = bool(asset_description_dict.get('marketable', False))
-        self.commodity = bool(asset_description_dict.get('commodity', False))
-
-        self.market_tradable_restriction = asset_description_dict.get('market_tradable_restriction', -1)
-        self.market_marketable_restriction = asset_description_dict.get('market_marketable_restriction', -1)
-
-        self.icon_url = asset_description_dict.get('icon_url')
-        self.icon_url_large = asset_description_dict.get('icon_url_large')
-
-        self.currency = asset_description_dict.get('currency')
-        self.descriptions = [Description(d) for d in asset_description_dict.get('descriptions', [])]
-        self.type = asset_description_dict.get('type', "")
-        self.background_color = asset_description_dict.get('background_color', "")
-class Item:
-    def __init__(self, item_dict: dict = None):
-        if not item_dict: item_dict = {}
-        self.name = item_dict.get('name', ' ')
-        self.hash_name = item_dict.get('hash_name', '')
-
-        self.sell_listings = item_dict.get('sell_listings', 0)
-        self.sell_price = item_dict.get('sell_price', 0)
-        self.sell_price_text = item_dict.get('sell_price_text', '')
-        self.sale_price_text = item_dict.get('sale_price_text', '')
-
-        self.asset_description = AssetDescription(item_dict.get('asset_description', {}))
-
-        self.app_name = item_dict.get('app_name')
-        self.app_icon = item_dict.get('app_icon')
-    def __repr__(self):
-        return f'<{self.__class__.__name__}> name: {self.name}, price: {self.sell_price_text}, listings: {self.sell_price}'
-    def is_bug_item(self) -> bool:
-        return self.hash_name != self.asset_description.market_hash_name
-    def is_empty(self) -> bool:
-        return self.hash_name == ''
-    def icon_url(self) -> str:
-       return f'https://community.akamai.steamstatic.com/economy/image/{self.asset_description.icon_url}/330x192?allow_animated=1'
-    def market_url(self) -> str:
-        return f'https://steamcommunity.com/market/listings/{self.asset_description.appid}/{self.asset_description.market_hash_name}'
-    def market_hash_name(self) -> str:
-        return self.asset_description.market_hash_name
-    def color(self):
-        return f'#{self.asset_description.name_color}' if self.asset_description.name_color else ''
-    def is_current_game(self, app_id: int):
-        return str(self.asset_description.appid) == str(app_id)
 
 class CraftManagerWidget(ft.Column):
     def __init__(self):
@@ -77,7 +16,8 @@ class CraftManagerWidget(ft.Column):
         self.isolated = True
         self.expand = True
         self.alignment = ft.MainAxisAlignment.START
-        self.__items: list[Item] = []
+        self.__items: list[MarketItem] = []
+        self.__example_item: MarketItem = None
         self.__crafts = {}
         self.__craft_widgets = {}
         self.__is_loading = False
@@ -310,19 +250,45 @@ class CraftManagerWidget(ft.Column):
 
         net_expected_income = expected_profit - expected_costs
 
-        plus_text = ft.Text(f"Макс. возможная прибыль: {round(max_theoretical_profit / 100, 2)}", text_align=ft.TextAlign.CENTER, expand=True, size=12)
-        minus_text = ft.Text(f"Макс. возможные затраты: {round(max_theoretical_costs / 100, 2)}", text_align=ft.TextAlign.CENTER, expand=True, size=12)
-        average_profit_text = ft.Text(f"Прогнозируемая прибыль: {round(expected_profit / 100, 2)}", text_align=ft.TextAlign.CENTER, expand=True, size=12)
-        average_loss_text = ft.Text(f"Прогнозируемые потери: {round(expected_costs / 100, 2)}", text_align=ft.TextAlign.CENTER, expand=True, size=12)
-        potential_income_text = ft.Text(f"Потенциальный доход: {round(net_expected_income / 100, 2)}", text_align=ft.TextAlign.CENTER, expand=True, size=12)
+        if not self.__example_item and self.__items:
+            self.__example_item = next((item for item in self.__items if item.sell_price_text), None)
+
+        plus_text = ft.Text(
+            f"Макс. возможная прибыль: {round(max_theoretical_profit / 100, 2) if not self.__example_item else self.__example_item.generate_number_in_currency(max_theoretical_profit)}",
+            text_align=ft.TextAlign.CENTER, expand=True, size=12
+        )
+        minus_text = ft.Text(
+            f"Макс. возможные затраты: {round(max_theoretical_costs / 100, 2) if not self.__example_item else self.__example_item.generate_number_in_currency(max_theoretical_costs)}",
+            text_align=ft.TextAlign.CENTER, expand=True, size=12
+        )
+
+        average_profit_text_visible = max_theoretical_profit != expected_profit
+        average_profit_text = ft.Text(
+            f"Прогнозируемая прибыль: {round(expected_profit / 100, 2) if not self.__example_item else self.__example_item.generate_number_in_currency(expected_profit)}",
+            text_align=ft.TextAlign.CENTER, expand=True, size=12
+        )
+        average_loss_text_visible = max_theoretical_costs != expected_costs
+        average_loss_text = ft.Text(
+            f"Прогнозируемые потери: {round(expected_costs / 100, 2) if not self.__example_item else self.__example_item.generate_number_in_currency(expected_costs)}",
+            text_align=ft.TextAlign.CENTER, expand=True, size=12
+        )
+        potential_income_text = ft.Text(
+            f"Потенциальный доход: {round(net_expected_income / 100, 2) if not self.__example_item else self.__example_item.generate_number_in_currency(net_expected_income)}",
+            text_align=ft.TextAlign.CENTER, expand=True, size=12
+        )
+        if self.__example_item:
+            plus_text.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(max_theoretical_profit)}'
+            average_profit_text.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(expected_profit)}'
+            potential_income_text.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(net_expected_income)}'
 
         craft_widgets_data['total_price'].controls = [
-            ft.Divider(),
             ft.Row(controls=[plus_text]),
             ft.Row(controls=[minus_text]),
-            ft.Divider(),
-            ft.Row(controls=[average_profit_text]),
-            ft.Row(controls=[average_loss_text]),
+
+            ft.Divider(visible=average_profit_text_visible or average_loss_text_visible),
+            ft.Row(controls=[average_profit_text], visible=average_profit_text_visible),
+            ft.Row(controls=[average_loss_text], visible=average_loss_text_visible),
+
             ft.Divider(),
             ft.Row(controls=[potential_income_text])
         ]
@@ -339,7 +305,7 @@ class CraftManagerWidget(ft.Column):
                 for is_input in ['input_item', 'output_item']:
                     if is_input in craft_data:
                         for market_hash_name, item_data in craft_data[is_input].items():
-                            item_market: Item = next((item for item in self.__items if item.market_hash_name() == market_hash_name), None)
+                            item_market: MarketItem = next((item for item in self.__items if item.market_hash_name() == market_hash_name), None)
                             if not item_market: continue
                             self.__crafts[craft_index][is_input][market_hash_name]['item_name'] = item_market.name
                             self.__crafts[craft_index][is_input][market_hash_name]['sell_price'] = item_market.sell_price
@@ -395,6 +361,12 @@ class CraftManagerWidget(ft.Column):
         item_image = ft.Image(src=item_dict.get('icon_url'), width=30, height=30)
         item_name = ft.Text(item_dict.get('item_name'), color=item_dict.get('color'), expand=True, max_lines=2, text_align=ft.TextAlign.CENTER)
         item_price = ft.TextField(label='Цена', value=f"{item_dict.get('sell_price_text', 0)}", width=120, dense=True, text_size=12, text_align=ft.TextAlign.RIGHT, disabled=True)
+
+        if is_input == 'output_item':
+            if not self.__example_item and self.__items:
+                self.__example_item = next((item for item in self.__items if item.sell_price_text), None)
+            item_price.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(int(item_dict.get("sell_price", 0)))}' if self.__example_item else ''
+
         item_count = ft.TextField(label='Кол-во', value=f"{item_dict.get('count', 0)}", width=80, dense=True, text_size=12, text_align=ft.TextAlign.RIGHT)
         item_count.on_change = lambda e: change_count(new_count=item_count)
         item_percent = ft.TextField(label='Процент', value=f"{item_dict.get('percent', 0)}", width=80, dense=True, text_size=12, text_align=ft.TextAlign.RIGHT,
@@ -419,7 +391,7 @@ class CraftManagerWidget(ft.Column):
         if item_dict not in self.__crafts[craft_index]:
             self.__crafts[craft_index][item_dict] = {}
 
-        def __select_item(item: Item):
+        def __select_item(item: MarketItem):
             __item_dict = {
                 'item_name': item.name,
                 'market_hash_name': item.market_hash_name(),
@@ -481,7 +453,7 @@ class CraftManagerWidget(ft.Column):
         self.update_items_widget_button.text = 'Ожидайте я обновляю предметы и цены'
         self.safe_update(self.update_items_widget_button)
         market_list = common.session.get_game_market_list(appid=self.__app_id)
-        build_items = [Item(item) for item in market_list]
+        build_items = [MarketItem(item) for item in market_list]
         self.__items = [item for item in build_items if not item.is_bug_item() and item.is_current_game(self.__app_id)]
         self.__items.sort(key=lambda item: item.name)
 
@@ -491,6 +463,7 @@ class CraftManagerWidget(ft.Column):
 
         time.sleep(5)
         if self.__items:
+            self.__example_item = next((item for item in self.__items if item.sell_price_text), None)
             self.create_widget_button.disabled = False
             self.create_widget_button.expand = True
             self.safe_update(self.create_widget_button)

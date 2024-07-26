@@ -1,14 +1,12 @@
-import datetime
 import re
-import threading
 import time
+import datetime
+import threading
 
-from flet_manager import common
 import flet as ft
-
-from sql_manager.config import setting
+from flet_manager import common
 from logger_utility.logger_config import logger
-from steam_utility.manager_steam_session import InventoryManager
+
 
 class ItemDescription:
     def __init__(self, description_dict: dict = None):

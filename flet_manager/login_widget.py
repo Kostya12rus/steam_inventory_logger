@@ -11,7 +11,7 @@ class LoginWidget(ft.Column):
         self.alignment = ft.MainAxisAlignment.CENTER
 
         self._title = ft.Text(
-            'Ваша сессия в Steam истекла. Пожалуйста, выполните вход заново.',
+            'Войдите в аккаунт Steam',
             size=24,
             color=ft.colors.BLUE,
             weight=ft.FontWeight.BOLD

@@ -1,11 +1,28 @@
-import datetime
+import flet as ft
 
 from . import InventoryWidget
-from .market_manager import MarketWidget
-from .inventory_stack_manager import InventoryStackWidget
-from .craft_manager import CraftManagerWidget
+from sql_manager import config
 from .shared_data import common
-import flet as ft
+from .market_manager import MarketWidget
+from .craft_manager import CraftManagerWidget
+from .inventory_stack_manager import InventoryStackWidget
+
+class ThemeToggleButton(ft.IconButton):
+    def __init__(self):
+        super().__init__()
+        self.icon = ft.icons.LIGHT_MODE if config.is_dark_mode else ft.icons.DARK_MODE
+        self.tooltip = "Сменить тему"
+        self.on_click = self.toggle_theme
+        self.height = 30
+        self.style = ft.ButtonStyle(padding=ft.padding.all(0))
+
+    def toggle_theme(self, *args):
+        self.page.theme_mode = ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.ThemeMode.LIGHT
+        is_dark_mode = self.page.theme_mode == ft.ThemeMode.DARK
+        self.icon = ft.icons.LIGHT_MODE if is_dark_mode else ft.icons.DARK_MODE
+        config.is_dark_mode = is_dark_mode
+        self.page.update()
+
 
 class BodyManager(ft.Column):
     def __init__(self):
@@ -22,6 +39,7 @@ class BodyManager(ft.Column):
 
         self.body_widget = ft.Column(expand=True)
         self.setting_widget = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
+        self.body_widget.controls = [self.inventory_page]
 
         self.button_inventory = ft.FilledButton(
             'Inventory', expand=True, on_click=lambda e: self.set_body_widget(self.inventory_page),
@@ -49,15 +67,19 @@ class BodyManager(ft.Column):
             dense=True,
             label='Игра',
             content_padding=10,
-            value=common.get_current_appid_name()
+            value=common.get_current_appid_name(),
+            padding=ft.padding.all(0)
         )
+
+        self.change_theme = ThemeToggleButton()
 
         self.setting_widget.controls = [
             self.button_inventory,
             self.button_inventory_stack,
             self.button_market,
             self.button_craft_manager,
-            self.drop_down_game
+            self.drop_down_game,
+            self.change_theme,
         ]
         self.controls = [self.setting_widget, self.body_widget]
 

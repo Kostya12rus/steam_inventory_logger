@@ -1,10 +1,10 @@
-import datetime
 import re
-import threading
 import time
+import datetime
+import threading
+import flet as ft
 
 from flet_manager import common
-import flet as ft
 from logger_utility.logger_config import logger
 
 class Description:
@@ -315,11 +315,13 @@ class MarketItemListTable(ft.DataTable):
             logger.exception('Exception while updating widget')
     def __on_change_name_filter(self, name_filter: str = ''):
         self.name_filter = name_filter
-        items_list: list[ItemData] = [item for market_hash_name, item in self.items_list.items()]
+        items_list: list[ItemData] = [item for market_hash_name, item in self.items_list.items()
+                                      if self.name_filter.lower() in item.item_name_widget_text.value.lower()]
+        if not items_list:
+            items_list = self.items_list.values()
 
-        self.rows = [item.item_widget_datarow for item in items_list if self.name_filter.lower() in item.item_name_widget_text.value.lower()]
+        self.rows = [item.item_widget_datarow for item in items_list]
         self.safe_update()
-
     def __on_change_sort(self, sort_type: str = '', update_sort: bool = False):
         if not update_sort:
             self.sort_descending = True if self.sort_type != sort_type else not self.sort_descending
@@ -327,6 +329,9 @@ class MarketItemListTable(ft.DataTable):
 
         items_list: list[ItemData] = [item for market_hash_name, item in self.items_list.items()
                                       if self.name_filter.lower() in item.item_name_widget_text.value.lower()]
+        if not items_list:
+            items_list = self.items_list.values()
+
         if self.sort_type == 'price_now':
             items_list.sort(key=lambda item: self.extract_number(item.now_item_price_widget_text.value), reverse=self.sort_descending)
         elif self.sort_type == 'count_now':
@@ -349,6 +354,7 @@ class MarketItemListTable(ft.DataTable):
 
         self.rows = [item.item_widget_datarow for item in items_list]
         self.safe_update()
+
     @staticmethod
     def extract_number(text):
         match = re.search(r'[-+]?\d[\d\s,]*\.?\d*|\d*\.?\d+', text)

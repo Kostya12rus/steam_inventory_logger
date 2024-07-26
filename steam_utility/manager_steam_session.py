@@ -156,7 +156,7 @@ class SteamWebSession:
         except:
             logger.exception(f"{self.login}: ошибка входа в Web Steam")
 
-    def get_inventory_items(self, appid=2923300, start=0, context_id=2):
+    def get_inventory_items(self, appid=3017120, start=0, context_id=2):
         def_url = f'http://steamcommunity.com/profiles/{self.steam_web.steam_id}/inventory/json/{appid}/{context_id}/?start={start}'
         try:
             req = self.steam_session.get(url=def_url, timeout=10)
@@ -179,7 +179,7 @@ class SteamWebSession:
         time.sleep(5)
         return None  # Возвращаем None, если произошла ошибка
 
-    def fetch_market_price(self, market_hash_name: str, appid: int = 2923300, currency: int = 5) -> dict | None:
+    def fetch_market_price(self, market_hash_name: str, appid: int = 3017120, currency: int = 5) -> dict | None:
         url = f"https://steamcommunity.com/market/priceoverview/"
         params = {'country': 'RU', 'appid': appid, 'currency': currency, 'market_hash_name': market_hash_name}
         market_info = self.steam_session.get(f"{url}?{urllib.parse.urlencode(params)}", timeout=10)
@@ -213,7 +213,7 @@ class SteamWebSession:
             print(f"Error fetching session ID: {e}")
             return None
 
-    def fetch_sellitem(self, appid: int = 2923300, contextid=2, assetid=0, amount=1, price=0) -> dict | None:
+    def fetch_sellitem(self, appid: int = 3017120, contextid=2, assetid=0, amount=1, price=0) -> dict | None:
         sessionid = self.get_session_id()
         if not assetid or not sessionid: return None
         url = 'https://steamcommunity.com/market/sellitem/'
@@ -234,7 +234,7 @@ class SteamWebSession:
         market_info = self.steam_session.post(url=url, timeout=10, headers=headers, data=params)
         return market_info.json() if market_info.ok else None
 
-    def fetch_item_nameid(self, market_hash_name: str, appid: int = 2923300) -> int | None:
+    def fetch_item_nameid(self, market_hash_name: str, appid: int = 3017120) -> int | None:
         if not market_hash_name or not appid: return None
 
         # Кодирование market_hash_name для безопасной передачи в URL
@@ -316,7 +316,7 @@ class SteamWebSession:
             logger.info(f"Обмен не отправлен, Steam ответил: {text_steam_send}")
             return
 
-    def get_game_market_list(self, appid: int = 2923300, start: int = 0, count: int = 100) -> list:
+    def get_game_market_list(self, appid: int = 3017120, start: int = 0, count: int = 100) -> list:
         """
         Получает список товаров на игровом рынке Steam.
 

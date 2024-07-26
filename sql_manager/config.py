@@ -34,7 +34,7 @@ class Setting:
     login = make_property('login', str, '')
     password = make_property('password', str, '')
     default_currency = make_property('default_currency', int, 1)
-    app_id = make_property('app_id', int, 2923300)
+    app_id = make_property('app_id', int, 3017120)
     prefix_currency = make_property('prefix_currency', str, '')
     suffix_currency = make_property('suffix_currency', str, 'руб')
 
@@ -44,6 +44,10 @@ class Setting:
     craft_system = make_property('craft_system', dict, {})
 
     auto_update_inventory = make_property('auto_update_inventory', bool, False)
+    is_dark_mode = make_property('is_dark_mode', bool, True)
+
+    installed_version = make_property('installed_version', float, 0.0)
+    accept_update = make_property('accept_update', bool, True)
 
 
 setting = Setting()
