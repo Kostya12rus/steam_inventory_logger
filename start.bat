@@ -2,9 +2,6 @@
 REM Определяем путь к проекту относительно текущего местоположения батника
 set PROJECT_DIR=%~dp0
 
-REM Переходим в директорию с Python
-cd /d "C:\Program Files\Python311"
-
 REM Обновляем pip
 python.exe -m pip install --upgrade pip
 

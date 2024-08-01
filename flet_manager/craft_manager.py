@@ -279,7 +279,10 @@ class CraftManagerWidget(ft.Column):
         if self.__example_item:
             plus_text.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(max_theoretical_profit)}'
             average_profit_text.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(expected_profit)}'
-            potential_income_text.tooltip = f'С учетом комиссий: {self.__example_item.calcutate_commision(net_expected_income)}'
+
+            profit_after_commision = self.__example_item.calcutate_commision_integer(expected_profit if average_profit_text_visible else max_theoretical_profit)
+            total_price = self.__example_item.calcutate_commision(profit_after_commision-(expected_costs if average_loss_text_visible else max_theoretical_costs))
+            potential_income_text.tooltip = f'С учетом комиссий: {total_price}'
 
         craft_widgets_data['total_price'].controls = [
             ft.Row(controls=[plus_text]),

@@ -22,6 +22,7 @@ class Games(Enum):
     EggSurprise = 3017120
     Banana = 2923300
     Monsters = 3062260
+    VHS = 3074340
 
 class Currency(Enum):
     USD = 1
@@ -138,12 +139,13 @@ class SharedClass:
 
     def set_currencie(self, currencie: str):
         currencie_id = self.currencies.get(currencie, None)
-        if currencie_id is None: return
-        self.update_current_inventory()
-        if self.currencies == currencie_id: return
+        if currencie_id is None: return False
+        # self.update_current_inventory()
+        if self.default_currency == currencie_id: return False
         setting.default_currency = currencie_id
         self.default_currency = currencie_id
-        self.set_current_inventory()
+        return True
+        # self.set_current_inventory()
 
     def __serialize_dates(self, obj):
         if isinstance(obj, datetime.datetime):
@@ -236,12 +238,13 @@ class SharedClass:
     def update_inventory(self):
         datetime_now = datetime.datetime.now()
         if self.next_updated_inventory > datetime_now: return
-        inventory = self.session.get_inventory_items(appid=self.app_id, context_id=self.get_contextid_appid())
+        app_id_search = self.app_id
+        inventory = self.session.get_inventory_items(appid=app_id_search, context_id=self.get_contextid_appid())
         self.next_updated_inventory = datetime_now + datetime.timedelta(seconds=30)
         if not inventory: return
         self.inventory = inventory
         now_inventory = inventory.get_count_items()
-        sqlite_manager.save_history(datetime_now, now_inventory, app_id=self.app_id)
+        sqlite_manager.save_history(datetime_now, now_inventory, app_id=app_id_search)
         return self.inventory
 
     def update_items_price(self):
@@ -301,11 +304,12 @@ class SharedClass:
     def update_market_list(self):
         datetime_now = datetime.datetime.now()
         if self.next_updated_market_list > datetime_now: return
-        market_list = self.session.get_game_market_list(appid=self.app_id)
+        app_id_search = self.app_id
+        market_list = self.session.get_game_market_list(appid=app_id_search)
         self.next_updated_market_list = datetime_now + datetime.timedelta(seconds=self.update_market_interval)
         if not market_list: return
         self.market_list = market_list
-        sqlite_manager.save_market_history(datetime_now, market_list, app_id=self.app_id)
+        sqlite_manager.save_market_history(datetime_now, market_list, app_id=app_id_search)
         return self.market_list
 
     def get_history_market_list(self):
@@ -376,7 +380,7 @@ class InventoryItem:
     def market_hash_name(self):
         return self.rg_descriptions.market_hash_name
     def color(self):
-        return f'#{self.rg_descriptions.name_color}' if self.rg_descriptions.name_color else ''
+        return f'#{self.rg_descriptions.name_color}'.replace('##', '#') if self.rg_descriptions.name_color else ''
     def get_amount(self):
         amount = int(self.amount)
         return amount if amount > 0 else 0
@@ -392,6 +396,8 @@ class InventoryItem:
         return bool(self.rg_descriptions.tradable)
     def is_marketable(self):
         return bool(self.rg_descriptions.marketable)
+    def is_current_app_id(self, app_id: int | str):
+        return str(self.rg_descriptions.appid) == str(app_id)
 
     def __repr__(self):
         return f'<{self.id}, classid: {self.classid}, instanceid: {self.instanceid}, name: {self.name()}, market_hash_name: {self.market_hash_name()}>'
@@ -409,7 +415,7 @@ class InventoryHistoryItem:
         self.name_color = item_dict.get('name_color', None)
     def get_color(self):
         if not self.name_color: return
-        return f'#{self.name_color}' if self.name_color else None
+        return f'#{self.name_color}'.replace('##', '#') if self.name_color else None
     def market_url(self) -> str:
         if not self.market_hash_name: return
         return f'https://steamcommunity.com/market/listings/{self.app_id}/{self.market_hash_name}'
@@ -553,7 +559,7 @@ class MarketItem:
     def get_delta(self, old_item: 'MarketItem') -> 'MarketItemDelta':
         return MarketItemDelta(self, old_item)
     def color(self) -> str:
-        return f'#{self.asset_description.name_color}' if self.asset_description.name_color else ''
+        return f'#{self.asset_description.name_color}'.replace('##', '#') if self.asset_description.name_color else ''
     def is_current_game(self, app_id: int) -> bool:
         return str(self.asset_description.appid) == str(app_id)
     def replace_number_in_currency(self, new_number):
@@ -563,10 +569,11 @@ class MarketItem:
     def multiply_price_in_currency(self, count: int):
         return self.generate_number_in_currency(self.sell_price * count)
     def calcutate_commision(self, price: int = None) -> str:
+        return self.generate_number_in_currency(self.calcutate_commision_integer(price))
+    def calcutate_commision_integer(self, price: int = None) -> int | float:
         if not price: price = self.sell_price
         commission = abs(price - (price / 115 * 100))
-        price_after_commission = price - commission
-        return self.generate_number_in_currency(price_after_commission)
+        return price - commission
 
 
 class MarketHistory:
@@ -653,24 +660,17 @@ class UpdateManager:
         return True
 
     def download_and_extract_github_zip(self, extract_to='.'):
-        print(self.server_url_download)
-        if not self.server_url_download:
-            return False
+        if not self.server_url_download: return False
 
         response = requests.get(self.server_url_download, timeout=10)
-        print(response)
-        print(response.ok)
-        if not response.ok:
-            return False
+        if not response.ok: return False
 
         with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
             temp_dir = os.path.join(extract_to, 'temp_extraction')
             zip_ref.extractall(temp_dir)
 
         project_folder = zip_ref.namelist()[0].split('/')[0]
-        print(f'{project_folder=}')
         project_path = os.path.join(temp_dir, project_folder)
-        print(f'{project_path=}')
 
         for item in os.listdir(project_path):
             src = os.path.join(project_path, item)

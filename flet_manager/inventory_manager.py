@@ -25,6 +25,7 @@ def create_text(value, size=14, expand=True, text_align=ft.TextAlign.CENTER):
         overflow=ft.TextOverflow.ELLIPSIS,
         expand=expand,
         size=size,
+        height=24
     )
 
 
@@ -35,6 +36,8 @@ class DialogSell(ft.AlertDialog):
         self.expand = True
         self.item_id = None
         self.callback_update = callback_update
+        prefix_currency = common.prefix_currency
+        suffix_currency = common.suffix_currency
 
         self.last_updated = datetime.datetime.now()
         self.item_data: InventoryItem = next((item for item in item_data if item.market_hash_name()), None)
@@ -64,15 +67,34 @@ class DialogSell(ft.AlertDialog):
                     width=1000
                 )
 
+        self.currency_text = ft.Text('Валюта должна соответствовать валюте вашего аккаунта, иначе цена продажи будет некорректной.',
+                                     size=18, color=ft.colors.RED, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER, expand=True)
+        self.drop_down_currency = ft.Dropdown(
+            on_change=self.__on_change_currency,
+            options=[ft.dropdown.Option(currency_name) for currency_name, currency_id in common.currencies.items()],
+            height=30,
+            text_size=14,
+            dense=True,
+            label='Валюта',
+            content_padding=10,
+            value=common.get_current_currency_name(),
+            padding=ft.padding.all(0),
+            expand=True
+        )
+        self.item_info_column.controls.append(ft.Row(controls=[self.currency_text]))
+        self.item_info_column.controls.append(ft.Row(controls=[self.drop_down_currency]))
+        self.item_info_column.controls.append(ft.Divider())
         self.button_price_sell = ft.TextField(label='Покупатель заплатит', dense=True, content_padding=10, expand=True, max_lines=1, text_align=ft.TextAlign.RIGHT,
-                                              prefix_text=common.prefix_currency, suffix_text=common.suffix_currency, on_change=self.on_change_button_price_sell)
+                                              prefix_text=prefix_currency, suffix_text=suffix_currency, on_change=self.on_change_button_price_sell,
+                                              border_color=ft.colors.BLUE)
         self.button_price_get = ft.TextField(label='Вы получите', dense=True, content_padding=10, expand=True, max_lines=1, text_align=ft.TextAlign.RIGHT,
-                                             prefix_text=common.prefix_currency, suffix_text=common.suffix_currency, on_change=self.on_change_button_price_get)
+                                             prefix_text=prefix_currency, suffix_text=suffix_currency, on_change=self.on_change_button_price_get,
+                                             border_color=ft.colors.BLUE)
         self.item_info_column.controls.append(ft.Row(controls=[self.button_price_sell, self.button_price_get]))
 
 
         self.count_item_sell = ft.TextField(label='Количество к продаже', dense=True, content_padding=10, expand=True, max_lines=1, text_align=ft.TextAlign.RIGHT,
-                                            suffix_text=f"из {self.item_count}", value='1', on_change=self.set_count_sell,
+                                            suffix_text=f"из {self.item_count}", value='1', on_change=self.set_count_sell, border_color=ft.colors.BLUE,
                                             input_filter=ft.InputFilter(allow=True, regex_string=r"[0-9]", replacement_string="0"))
         self.count_item_sell_one = ft.FilledButton('1', on_click=lambda e: self.set_count_sell(count=1))
         self.count_item_sell_center = ft.FilledButton('50%', on_click=lambda e, _count=self.item_count: self.set_count_sell(count=_count * 0.5))
@@ -80,12 +102,10 @@ class DialogSell(ft.AlertDialog):
         count_row = ft.Row(controls=[self.count_item_sell, self.count_item_sell_one, self.count_item_sell_center, self.count_item_sell_all])
         self.item_info_column.controls.append(count_row)
 
-        self.button_total_price_sell = ft.TextField(label='Всего покупатель заплатит', dense=True, content_padding=10, expand=True, max_lines=1,
-                                                    text_align=ft.TextAlign.RIGHT, prefix_text=common.prefix_currency, disabled=True,
-                                                    suffix_text=common.suffix_currency)
-        self.button_total_price_get = ft.TextField(label='Всего вы получите', dense=True, content_padding=10, expand=True, max_lines=1,
-                                                   text_align=ft.TextAlign.RIGHT, prefix_text=common.prefix_currency, disabled=True,
-                                                   suffix_text=common.suffix_currency)
+        self.button_total_price_sell = ft.TextField(label='Всего покупатель заплатит', dense=True, content_padding=10, expand=True, max_lines=1, text_align=ft.TextAlign.RIGHT,
+                                                    prefix_text=prefix_currency, suffix_text=suffix_currency, disabled=True)
+        self.button_total_price_get = ft.TextField(label='Всего вы получите', dense=True, content_padding=10, expand=True, max_lines=1, text_align=ft.TextAlign.RIGHT,
+                                                   prefix_text=prefix_currency, suffix_text=suffix_currency, disabled=True)
 
         self.item_info_column.controls.append(ft.Row(controls=[self.button_total_price_sell, self.button_total_price_get]))
 
@@ -94,6 +114,14 @@ class DialogSell(ft.AlertDialog):
 
         self.log_column = ft.Column(expand=True, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
         self.item_info_column.controls.append(ft.Row(controls=[self.log_column], expand=True))
+        self.price_sell_value = 0
+        self.price_get_value = 0
+
+    def __on_change_currency(self, *args):
+        status_change = common.set_currencie(self.drop_down_currency.value)
+        if not status_change: return
+        self.last_updated = datetime.datetime.now()
+        self.update_widget()
 
     def start_sell(self, *args):
         if not self.button_start_sell.disabled:
@@ -129,14 +157,14 @@ class DialogSell(ft.AlertDialog):
             self.button_price_sell.update()
 
     def update_total(self, *args):
-        button_price_sell = float(self.button_price_sell.value if self.button_price_sell.value else 0)
-        button_price_get = float(self.button_price_get.value if self.button_price_get.value else 0)
+        button_price_sell = float(self.price_sell_value if self.price_sell_value else 0)
+        button_price_get = float(self.price_get_value if self.price_get_value else 0)
         count_item_sell = int(self.count_item_sell.value if self.count_item_sell.value else 0)
 
-        self.button_total_price_sell.value = f'{round(button_price_sell * count_item_sell, 2)}'
+        self.button_total_price_sell.value = f'{round(button_price_sell * count_item_sell, 2):.2f}'
         self.button_total_price_sell.update()
 
-        self.button_total_price_get.value = f'{round(button_price_get * count_item_sell, 2)}'
+        self.button_total_price_get.value = f'{round(button_price_get * count_item_sell, 2):.2f}'
         self.button_total_price_get.update()
 
         self.button_start_sell.text = f'Продать {count_item_sell} {self.item_data.name()} за {round(button_price_get * count_item_sell, 2)}'
@@ -161,26 +189,30 @@ class DialogSell(ft.AlertDialog):
             self.button_start_sell.disabled = True
             self.button_price_sell.update()
 
-    def calculate_total(self, price_get: float = None, price_sell: float = None):
-        min_commission = 0.02  # Минимальная комиссия
+    def calculate_total(self, price_get: float = None, price_sell: float = None, count_item_sell: int = None, all_update=True):
+        if count_item_sell:
+            self.set_count_sell(count=count_item_sell)
 
+        min_commission = 0.02  # Минимальная комиссия
         if price_sell is not None:
-            price_get_value = price_sell / 115 * 100
-            price_sell_value = price_sell
-            if price_sell_value - price_get_value < min_commission:
-                price_get_value = price_sell_value - min_commission
+            self.price_get_value = price_sell / 115 * 100
+            self.price_sell_value = price_sell
+            if self.price_sell_value - self.price_get_value < min_commission:
+                self.price_get_value = self.price_sell_value - min_commission
         elif price_get is not None:
-            price_get_value = price_get
-            price_sell_value = price_get / 100 * 115
-            if price_sell_value - price_get_value < min_commission:
-                price_sell_value = price_get_value + min_commission
+            self.price_get_value = price_get
+            self.price_sell_value = price_get / 100 * 115
+            if self.price_sell_value - self.price_get_value < min_commission:
+                self.price_sell_value = self.price_get_value + min_commission
         else:
             return  # Ничего не делаем, если оба значения отсутствуют
 
-        self.button_price_get.value = f'{round(price_get_value, 2):.2f}'
-        self.button_price_get.update()
-        self.button_price_sell.value = f'{round(price_sell_value, 2):.2f}'
-        self.button_price_sell.update()
+        if price_sell or all_update:
+            self.button_price_get.value = f'{round(self.price_get_value, 2):.2f}'
+            self.button_price_get.update()
+        if price_get or all_update:
+            self.button_price_sell.value = f'{round(self.price_sell_value, 2):.2f}'
+            self.button_price_sell.update()
 
         self.update_total()
 
@@ -193,7 +225,7 @@ class DialogSell(ft.AlertDialog):
 
         if match:
             try:
-                self.calculate_total(price_sell=float(match.group(0)))
+                self.calculate_total(price_sell=float(match.group(0)), all_update=False)
             except:
                 pass
         else:
@@ -209,7 +241,7 @@ class DialogSell(ft.AlertDialog):
 
         if match:
             try:
-                self.calculate_total(price_get=float(match.group(0)))
+                self.calculate_total(price_get=float(match.group(0)), all_update=False)
             except:
                 pass
         else:
@@ -258,6 +290,20 @@ class DialogSell(ft.AlertDialog):
     def update_sell_buy_info(self):
         self.itemordershistogram = self.load_itemordershistogram()
         if not self.itemordershistogram: return
+        prefix_currency = self.itemordershistogram.get('price_prefix', '')
+        common.prefix_currency = prefix_currency
+        self.button_price_sell.prefix_text = prefix_currency
+        self.button_price_get.prefix_text = prefix_currency
+        self.button_total_price_sell.prefix_text = prefix_currency
+        self.button_total_price_get.prefix_text = prefix_currency
+
+        suffix_currency = self.itemordershistogram.get('price_suffix', '')
+        common.suffix_currency = suffix_currency
+        self.button_price_sell.suffix_text = suffix_currency
+        self.button_price_get.suffix_text = suffix_currency
+        self.button_total_price_sell.suffix_text = suffix_currency
+        self.button_total_price_get.suffix_text = suffix_currency
+
         self.buy_info_column.controls = []
         buy_order_summary = self.__get_clear_text(self.itemordershistogram.get('buy_order_summary', ''))
         buy_order_summary_content = ft.Text(value=buy_order_summary)
@@ -265,13 +311,14 @@ class DialogSell(ft.AlertDialog):
         buy_order_graph = self.itemordershistogram.get('buy_order_graph', [list[int, int, str]])
         for item in buy_order_graph[:15]:
             price, count, text = item
-            item_conrtol = ft.Container(ink=True, on_click=lambda e, _price=price: self.calculate_total(price_sell=_price))
+            item_conrtol = ft.Container(ink=True, on_click=lambda e, _price=price, _count=count: self.calculate_total(price_sell=_price, count_item_sell=_count))
+            item_conrtol.tooltip = str(text) if text else ''
             self.buy_info_column.controls.append(item_conrtol)
             item_row = ft.Row()
-            item_price_conrtol = ft.Container(width=60, content=ft.Text(value=f'{common.prefix_currency}{round(price, 2)} {common.suffix_currency}',
-                                                                        expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
-            item_count_conrtol = ft.Container(width=80, content=ft.Text(value=f'{count} шт.',
-                                                                        expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
+            item_price_conrtol = ft.Container(width=100, content=ft.Text(value=f'{prefix_currency}{round(price, 2):.2f} {suffix_currency}',
+                                                                         expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
+            item_count_conrtol = ft.Container(width=100, content=ft.Text(value=f'{count} шт.',
+                                                                         expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
             item_row.controls = [item_price_conrtol, item_count_conrtol]
             item_conrtol.content = item_row
 
@@ -282,13 +329,14 @@ class DialogSell(ft.AlertDialog):
         sell_order_graph = self.itemordershistogram.get('sell_order_graph', [list[int, int, str]])
         for item in sell_order_graph[:15]:
             price, count, text = item
-            item_conrtol = ft.Container(ink=True, on_click=lambda e, _price=price: self.calculate_total(price_sell=_price))
+            item_conrtol = ft.Container(ink=True, on_click=lambda e, _price=price, _count=count: self.calculate_total(price_sell=_price, count_item_sell=_count))
+            item_conrtol.tooltip = str(text) if text else ''
             self.sell_info_column.controls.append(item_conrtol)
             item_row = ft.Row()
-            item_price_conrtol = ft.Container(width=60, content=ft.Text(value=f'{common.prefix_currency}{round(price, 2)} {common.suffix_currency}',
-                                                                        expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
-            item_count_conrtol = ft.Container(width=80, content=ft.Text(value=f'{count} шт.',
-                                                                        expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
+            item_price_conrtol = ft.Container(width=100, content=ft.Text(value=f'{prefix_currency}{round(price, 2):.2f} {suffix_currency}',
+                                                                         expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
+            item_count_conrtol = ft.Container(width=100, content=ft.Text(value=f'{count} шт.',
+                                                                         expand=True, text_align=ft.TextAlign.RIGHT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS))
             item_row.controls = [item_price_conrtol, item_count_conrtol]
             item_conrtol.content = item_row
 
@@ -335,7 +383,11 @@ class ItemData:
                                                      self.image,
                                                      self.name_text
                                                  ]))
-        self.single_price_now_text = create_text(' ', text_align=ft.TextAlign.RIGHT)
+
+        self.single_price_now_text = ft.TextField(label='', content_padding=5, dense=True, expand=True, max_lines=1, text_align=ft.TextAlign.RIGHT, text_size=14)
+        self.single_price_now_text.on_change = self.__on_update_user_single_price_now
+        # self.single_price_now_text.on_focus = self.__on_update_user_single_price_now
+
         self.price_now_text = create_text(' ', text_align=ft.TextAlign.RIGHT)
         self.count_now_text = create_text('0шт.', text_align=ft.TextAlign.RIGHT)
         self.price_hours_text = create_text(' ', text_align=ft.TextAlign.RIGHT)
@@ -345,6 +397,16 @@ class ItemData:
         self.icon_sell = ft.IconButton(ft.icons.ATTACH_MONEY, icon_color=ft.colors.GREEN, on_click=self.__sell_item, height=29,
                                        style=ft.ButtonStyle(padding=ft.padding.all(0)))
         self.item_main_row = self.__create_widget()
+
+        self.user_single_price_now = None
+        self.example_market: MarketItem | None = None
+        self.update_total_callback: callable | None = None
+
+    def __on_update_user_single_price_now(self, *args):
+        unified_value = self.single_price_now_text.value.replace(',', '.')
+        match = re.search(r'\d+(\.\d+)?', unified_value)
+        self.user_single_price_now = float(match.group(0)) if match else None
+        self.update_widget_item(is_update=True)
 
     def set_page(self, page: ft.Page):
         self.__page = page
@@ -398,7 +460,7 @@ class ItemData:
                 [self.item_history_day.name] +
                 [self.market_info.name]
         )
-        name = next((i for i in all_name if i), None)
+        name = next((i.strip() for i in all_name if i and i.strip()), None)
         all_color = (
                 [i.color() for i in self.item_list] +
                 [self.item_history_hour.get_color()] +
@@ -412,42 +474,56 @@ class ItemData:
         self.name_text.value = name if name else self.name_text.value
         self.name_text.color = color if color else self.name_text.color
 
-        self.single_price_now_text.value = self.market_info.multiply_price_in_currency(1) if self.market_info else ' '
+        user_price = self.user_single_price_now
+
+        if user_price is None:
+            self.single_price_now_text.value = self.market_info.multiply_price_in_currency(1) if self.market_info else ' '
         single_price_now_text_tooltip = self.market_info.calcutate_commision() if self.market_info else ''
         self.single_price_now_text.tooltip = f'С учетом комиссии: {single_price_now_text_tooltip}' if single_price_now_text_tooltip else ''
+        if user_price is not None:
+            single_price_now_text_tooltip = self.example_market.calcutate_commision(user_price*100) if self.example_market else ''
+            self.single_price_now_text.tooltip = f'С учетом комиссии: {single_price_now_text_tooltip}' if single_price_now_text_tooltip else ''
 
         count_now = sum(i.get_amount() for i in self.item_list)
         self.price_now_text.value = self.market_info.multiply_price_in_currency(count_now) if self.market_info else ' '
-        price_now_text_tooltip = self.market_info.calcutate_commision(self.market_info.sell_price*count_now) if self.market_info else ''
-        self.price_now_text.tooltip = f'С учетом комиссии: {price_now_text_tooltip}' if price_now_text_tooltip else ''
         self.count_now_text.value = f'{count_now}шт.'
+        if user_price is not None:
+            self.price_now_text.value = self.example_market.generate_number_in_currency(user_price*100*count_now) if self.example_market else f"{round(user_price*count_now, 2):.2f}"
 
         hour_change = count_now - self.item_history_hour.count
         hour_change_color = ft.colors.GREEN if hour_change > 0 else ft.colors.RED
         self.price_hours_text.value = self.market_info.multiply_price_in_currency(hour_change) if self.market_info and hour_change != 0 else ' '
-        price_hours_text_tooltip = self.market_info.calcutate_commision(hour_change) if self.market_info and hour_change != 0 else ''
-        self.price_hours_text.tooltip = f'С учетом комиссии: {price_hours_text_tooltip}' if price_hours_text_tooltip else ''
         self.price_hours_text.color = hour_change_color
         self.count_hours_text.value = f'{hour_change}шт.' if hour_change != 0 else ' '
         self.count_hours_text.color = hour_change_color
+        if user_price is not None and hour_change != 0:
+            self.price_hours_text.value = self.example_market.generate_number_in_currency(user_price*100*hour_change) if self.example_market else f"{round(user_price*hour_change, 2):.2f}"
 
         day_change = count_now - self.item_history_day.count
         day_change_color = ft.colors.GREEN if day_change > 0 else ft.colors.RED
         self.price_day_text.value = self.market_info.multiply_price_in_currency(day_change) if self.market_info and day_change != 0 else ' '
-        price_day_text_tooltip = self.market_info.calcutate_commision(day_change) if self.market_info and day_change != 0 else ''
-        self.price_day_text.tooltip = f'С учетом комиссии: {price_day_text_tooltip}' if price_day_text_tooltip else ''
         self.price_day_text.color = day_change_color
         self.count_day_text.value = f'{day_change}шт.' if day_change != 0 else ' '
         self.count_day_text.color = day_change_color
+        if user_price is not None and day_change != 0:
+            self.price_day_text.value = self.example_market.generate_number_in_currency(user_price*100*day_change) if self.example_market else f"{round(user_price*day_change, 2):.2f}"
 
         self.name = self.name_text.value
-        self.single_price_now = self.market_info.sell_price if self.market_info else 0
-        self.price_now = self.market_info.sell_price * count_now if self.market_info else 0
+        self.single_price_now = user_price * 100 if user_price is not None else self.market_info.sell_price if self.market_info else 0
+        self.price_now = self.single_price_now * count_now
         self.count_now = count_now
-        self.price_hours = self.market_info.sell_price * hour_change if self.market_info else 0
+        price_now_text_tooltip = self.market_info.calcutate_commision(self.price_now) if self.price_now else ''
+        self.price_now_text.tooltip = f'С учетом комиссии: {price_now_text_tooltip}' if price_now_text_tooltip else ''
+
+        self.price_hours = self.single_price_now * hour_change
         self.count_hours = hour_change
-        self.price_day = self.market_info.sell_price * day_change if self.market_info else 0
+        price_hours_text_tooltip = self.market_info.calcutate_commision(self.price_hours) if self.price_hours else ''
+        self.price_hours_text.tooltip = f'С учетом комиссии: {price_hours_text_tooltip}' if price_hours_text_tooltip else ''
+
+        self.price_day = self.single_price_now * day_change
         self.count_day = day_change
+        price_day_text_tooltip = self.market_info.calcutate_commision(self.price_day) if self.price_day else ''
+        self.price_day_text.tooltip = f'С учетом комиссии: {price_day_text_tooltip}' if price_day_text_tooltip else ''
 
         is_any_marketable = any([i.is_marketable() for i in self.item_list])
         if (not is_any_marketable or count_now <= 0) and not self.icon_sell.disabled:
@@ -461,6 +537,8 @@ class ItemData:
 
         if is_update:
             self.safe_update()
+            if self.update_total_callback:
+                self.update_total_callback()
 
     def add_item(self, items: list[InventoryItem]):
         self.item_list = [i for i in items if i.market_hash_name() == self.market_hash_name]
@@ -539,7 +617,6 @@ class InventoryItemListTable(ft.Column):
             self.update() if widget is None else widget.update()
         except:
             logger.exception('Exception while updating widget')
-
 
     def __create_button(self, label, sort_key, expand=True):
         return ft.FilledButton(
@@ -703,13 +780,19 @@ class InventoryItemListTable(ft.Column):
         now_list_market_hash_name = {item.market_hash_name() for item in now_list_inventory}
         list_market_hash_name = now_list_market_hash_name | hour_history.get_list_market_hash_name() | day_history.get_list_market_hash_name()
 
-        market_items = [MarketItem(item) for item in common.market_list]
+        _market_items = [MarketItem(item) for item in common.market_list]
+        market_items = [item for item in _market_items if item.is_current_game(common.app_id)]
+        ready_market_example: MarketItem = next((item for item in market_items if item.sell_price_text), None)
 
         for market_hash_name, item in self.item_widgets.items(): item.clear_widget(is_update=False)
         for market_hash_name in list_market_hash_name:
             if market_hash_name not in self.item_widgets:
                 self.item_widgets[market_hash_name] = ItemData(market_hash_name)
+                self.item_widgets[market_hash_name].update_total_callback = self.update_total
             item_widgets = self.item_widgets[market_hash_name]
+
+            if ready_market_example and not item_widgets.example_market:
+                item_widgets.example_market = ready_market_example
 
             item_widgets.add_item([item for item in now_list_inventory if item and item.market_hash_name() == market_hash_name])
             item_widgets.update_history(
@@ -723,11 +806,15 @@ class InventoryItemListTable(ft.Column):
         self.__on_change_sort(self.sort_type, update_sort=True)
     def __update_market(self, market: list):
         if not market: return
-        market_items = [MarketItem(item) for item in market]
+        _market_items = [MarketItem(item) for item in market]
+        market_items = [item for item in _market_items if item.is_current_game(common.app_id)]
+        ready_market_example: MarketItem = next((item for item in market_items if item.sell_price_text), None)
 
         for market_hash_name, item in self.item_widgets.items():
             market_item = next((item for item in market_items if item.market_hash_name() == market_hash_name), None)
             item.add_market_info(market_item)
+            if ready_market_example and not item.example_market:
+                item.example_market = ready_market_example
 
         self.__on_change_sort(self.sort_type, update_sort=True)
 
@@ -773,6 +860,7 @@ class InventoryItemListTable(ft.Column):
         
         items_list: list[ItemData] = [item for market_hash_name, item in self.item_widgets.items()
                                       if self.name_filter.lower() in item.name.lower()]
+
         if self.sort_type == 'price_now':
             items_list.sort(key=lambda item: item.price_now, reverse=self.sort_descending)
         elif self.sort_type == 'single_price_now':
@@ -790,9 +878,19 @@ class InventoryItemListTable(ft.Column):
         elif self.sort_type == 'count_day':
             items_list.sort(key=lambda item: item.count_day, reverse=self.sort_descending)
 
+        self.update_total()
+
+        self.items_column.controls = [item.item_main_row for item in items_list]
+        self.safe_update()
+
+
+    def update_total(self, *args):
+        items_list: list[ItemData] = [item for market_hash_name, item in self.item_widgets.items()
+                                      if self.name_filter.lower() in item.name.lower()]
+
         ready_market_example: MarketItem = next((item.market_info for item in items_list if item.market_info and item.market_info.sell_price_text), None)
 
-        sum_single_price_now = sum([item.single_price_now for item in items_list], start=0)
+        # sum_single_price_now = sum([item.single_price_now for item in items_list], start=0)
         # self.single_price_now_text.value = ready_market_example.generate_number_in_currency(sum_single_price_now) if ready_market_example else ' '
         self.single_price_now_text.value = ' '
 
@@ -814,7 +912,6 @@ class InventoryItemListTable(ft.Column):
         self.price_day_text.tooltip = f'С учетом комиссии: {price_day_text_tooltip}' if price_day_text_tooltip else ''
         self.count_day_text.value = f'{sum([item.count_day for item in items_list], start=0)}шт.'
 
-        self.items_column.controls = [item.item_main_row for item in items_list]
         self.safe_update()
 
 
@@ -888,6 +985,13 @@ class InventoryWidget(ft.Column):
         if self.__last_app_id == common.app_id: return
         self.__last_app_id = common.app_id
         self.table_widget.update_clear()
+
+        self.update_widget_button.text = 'Обновить инвентарь'
+        self.__next_update_inventory = datetime.datetime.min
+
+        self.update_price_widget_button.text = 'Обновить цены'
+        self.__next_update_market = datetime.datetime.min
+
         self.safe_update(self)
 
     @staticmethod

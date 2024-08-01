@@ -332,25 +332,26 @@ class MarketItemListTable(ft.DataTable):
         if not items_list:
             items_list = self.items_list.values()
 
-        if self.sort_type == 'price_now':
-            items_list.sort(key=lambda item: self.extract_number(item.now_item_price_widget_text.value), reverse=self.sort_descending)
-        elif self.sort_type == 'count_now':
-            items_list.sort(key=lambda item: self.extract_number(item.now_item_count_widget_text.value), reverse=self.sort_descending)
+        if items_list:
+            if self.sort_type == 'price_now':
+                items_list.sort(key=lambda item: self.extract_number(item.now_item_price_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'count_now':
+                items_list.sort(key=lambda item: self.extract_number(item.now_item_count_widget_text.value), reverse=self.sort_descending)
 
-        elif self.sort_type == 'price_last':
-            items_list.sort(key=lambda item: self.extract_number(item.last_item_price_widget_text.value), reverse=self.sort_descending)
-        elif self.sort_type == 'count_last':
-            items_list.sort(key=lambda item: self.extract_number(item.last_item_count_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'price_last':
+                items_list.sort(key=lambda item: self.extract_number(item.last_item_price_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'count_last':
+                items_list.sort(key=lambda item: self.extract_number(item.last_item_count_widget_text.value), reverse=self.sort_descending)
 
-        elif self.sort_type == 'price_hours':
-            items_list.sort(key=lambda item: self.extract_number(item.hour_item_price_widget_text.value), reverse=self.sort_descending)
-        elif self.sort_type == 'count_hours':
-            items_list.sort(key=lambda item: self.extract_number(item.hour_item_count_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'price_hours':
+                items_list.sort(key=lambda item: self.extract_number(item.hour_item_price_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'count_hours':
+                items_list.sort(key=lambda item: self.extract_number(item.hour_item_count_widget_text.value), reverse=self.sort_descending)
 
-        elif self.sort_type == 'price_day':
-            items_list.sort(key=lambda item: self.extract_number(item.day_item_price_widget_text.value), reverse=self.sort_descending)
-        elif self.sort_type == 'count_day':
-            items_list.sort(key=lambda item: self.extract_number(item.day_item_count_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'price_day':
+                items_list.sort(key=lambda item: self.extract_number(item.day_item_price_widget_text.value), reverse=self.sort_descending)
+            elif self.sort_type == 'count_day':
+                items_list.sort(key=lambda item: self.extract_number(item.day_item_count_widget_text.value), reverse=self.sort_descending)
 
         self.rows = [item.item_widget_datarow for item in items_list]
         self.safe_update()
